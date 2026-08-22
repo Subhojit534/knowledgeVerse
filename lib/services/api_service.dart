@@ -13,14 +13,14 @@ import 'api_config.dart';
 /// across all application modules:
 /// - Authentication
 /// - User Profile
-/// - Lessons
-/// - Buildings
-/// - Progress
+/// - Lessons & AI Quiz Engine
+/// - Buildings & World
+/// - Progress & XP
 /// - Leaderboard
-/// - Inventory
-/// - Quests
-/// - Rewards
-/// - AI Features
+/// - Inventory & Equipment
+/// - Arcane Shop
+/// - Social & Friends
+/// - Guilds & Real-time Chat
 class ApiService {
   static const Duration _defaultTimeout = Duration(seconds: 60);
 
@@ -146,7 +146,7 @@ class ApiService {
   }
 
   // ===========================================================================
-  // MODULE SPECIFIC ROUTE ENDPOINTS
+  // MODULE SPECIFIC ROUTE HELPERS
   // ===========================================================================
 
   /// Authentication endpoints
@@ -155,14 +155,8 @@ class ApiService {
   /// User Profile endpoints
   static String profileRoute(String subpath) => '/api/profile/$subpath';
 
-  /// Lessons endpoints
-  static String lessonsRoute(String subpath) => '/api/lessons/$subpath';
-
-  /// Building endpoints
-  static String buildingsRoute(String subpath) => '/api/buildings/$subpath';
-
-  /// Progress endpoints
-  static String progressRoute(String subpath) => '/api/progress/$subpath';
+  /// Lessons & Learning endpoints
+  static String learningRoute(String subpath) => '/api/learning/$subpath';
 
   /// Leaderboard endpoints
   static String leaderboardRoute(String subpath) => '/api/leaderboard/$subpath';
@@ -170,12 +164,12 @@ class ApiService {
   /// Inventory endpoints
   static String inventoryRoute(String subpath) => '/api/inventory/$subpath';
 
-  /// Quest endpoints
-  static String questsRoute(String subpath) => '/api/quests/$subpath';
+  /// Arcane Shop endpoints
+  static String shopRoute(String subpath) => '/api/shop/$subpath';
 
-  /// Reward endpoints
-  static String rewardsRoute(String subpath) => '/api/rewards/$subpath';
+  /// Social endpoints
+  static String socialRoute(String subpath) => '/api/social/$subpath';
 
-  /// AI Feature endpoints
-  static String aiRoute(String subpath) => '/api/ai/$subpath';
+  /// Guilds endpoints
+  static String guildsRoute(String subpath) => '/api/guilds/$subpath';
 }

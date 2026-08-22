@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/player_profile.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class LeaderboardEntry {
@@ -30,9 +33,6 @@ class LeaderboardEntry {
   });
 }
 
-/// Authentic 16-Bit RPG Hall of Champions Leaderboard Screen.
-/// Features 16-bit 3D Crown Stage, double-gold pixel borders (#F2CA50),
-/// 0-blur pixel shadows, Press Start 2P typography, and a Centered Inspector Dialog.
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
 
@@ -44,8 +44,82 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   String _selectedCategory = 'GLOBAL';
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  List<LeaderboardEntry> _entries = [];
+  bool _isLoading = true;
+  String _myPlayerName = 'EXPLORER';
 
-  static const List<LeaderboardEntry> _allEntries = [
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveLeaderboard();
+  }
+
+  Future<void> _fetchLiveLeaderboard() async {
+    final profile = await PlayerProfile.load();
+    if (profile != null && profile.name.trim().isNotEmpty && mounted) {
+      setState(() {
+        _myPlayerName = profile.name.trim().toUpperCase();
+      });
+    }
+
+    try {
+      final res = await ApiService.get('/api/leaderboard');
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final rawList = data['leaderboard'] as List<dynamic>? ?? [];
+        final List<LeaderboardEntry> parsed = [];
+
+        for (final item in rawList) {
+          final map = item as Map<String, dynamic>;
+          final rank = map['rank'] as int? ?? (parsed.length + 1);
+          final name = map['name'] as String? ?? 'Wizard';
+          final title = map['title'] as String? ?? 'Scholar';
+          final level = map['level'] as int? ?? 1;
+          final score = map['score'] as int? ?? (map['xp'] as int? ?? 0);
+          final streakDays = map['streakDays'] as int? ?? 7;
+          final initial = (name.isNotEmpty) ? name.substring(0, 1).toUpperCase() : 'W';
+          
+          Color crownColor = Colors.transparent;
+          if (rank == 1) crownColor = const Color(0xFFF2CA50);
+          if (rank == 2) crownColor = const Color(0xFFC0C0C0);
+          if (rank == 3) crownColor = const Color(0xFFCD7F32);
+
+          parsed.add(LeaderboardEntry(
+            rank: rank,
+            name: name,
+            title: title,
+            level: level,
+            score: score,
+            guildTag: map['guildTag'] as String? ?? 'ARC',
+            streakDays: streakDays,
+            crownColor: crownColor,
+            avatarInitial: initial,
+            avatarColor: rank == 1 ? const Color(0xFFF2CA50) : rank == 2 ? const Color(0xFFDEB7FF) : const Color(0xFF60A5FA),
+            domainMastery: map['domainMastery'] as String? ?? 'General (85%)',
+          ));
+        }
+
+        if (mounted && parsed.isNotEmpty) {
+          setState(() {
+            _entries = parsed;
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [LeaderboardScreen Error]: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _entries = _fallbackEntries;
+        _isLoading = false;
+      });
+    }
+  }
+
+  static const List<LeaderboardEntry> _fallbackEntries = [
     LeaderboardEntry(
       rank: 1,
       name: 'Victoria Prime',
@@ -110,45 +184,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       avatarInitial: 'L',
       avatarColor: Color(0xFFF28B82),
       domainMastery: 'History (99%)',
-    ),
-    LeaderboardEntry(
-      rank: 6,
-      name: 'Kaelen Drake',
-      title: 'Algorithm King',
-      level: 17,
-      score: 26400,
-      guildTag: 'ARC',
-      streakDays: 16,
-      crownColor: Colors.transparent,
-      avatarInitial: 'K',
-      avatarColor: Color(0xFF82C0A0),
-      domainMastery: 'Computer Science (90%)',
-    ),
-    LeaderboardEntry(
-      rank: 7,
-      name: 'Aria Star',
-      title: 'Alchemy Specialist',
-      level: 16,
-      score: 24100,
-      guildTag: 'ARC',
-      streakDays: 14,
-      crownColor: Colors.transparent,
-      avatarInitial: 'A',
-      avatarColor: Color(0xFFDEB7FF),
-      domainMastery: 'Chemistry (88%)',
-    ),
-    LeaderboardEntry(
-      rank: 14,
-      name: 'Alex Rover (You)',
-      title: 'Civilization Architect',
-      level: 14,
-      score: 18450,
-      guildTag: 'ARC',
-      streakDays: 12,
-      crownColor: Colors.transparent,
-      avatarInitial: 'A',
-      avatarColor: Color(0xFFF2CA50),
-      domainMastery: 'Mathematics (85%)',
     ),
   ];
 
@@ -345,7 +380,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredEntries = _allEntries.where((e) {
+    if (_isLoading) {
+      // Loading state indicator
+    }
+    final list = _entries.isNotEmpty ? _entries : _fallbackEntries;
+    final filteredEntries = list.where((e) {
       if (_searchQuery.isEmpty) return true;
       return e.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           e.guildTag.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -372,7 +411,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         const SizedBox(height: 14),
 
                         // 16-Bit 3D Legendary Crown Stage
-                        _buildGrandPodium(),
+                        _buildGrandPodium(list),
                         const SizedBox(height: 18),
 
                         // Category Filter Pills
@@ -397,7 +436,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             right: 16,
             bottom: 12,
             child: SafeArea(
-              child: _buildStickyPersonalBar(),
+              child: _buildStickyPersonalBar(filteredEntries),
             ),
           ),
         ],
@@ -514,10 +553,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // ─── 16-BIT 3D STAGE SHOWCASE ──────────────────────────────────────────────
-  Widget _buildGrandPodium() {
-    final top1 = _allEntries[0];
-    final top2 = _allEntries[1];
-    final top3 = _allEntries[2];
+  Widget _buildGrandPodium(List<LeaderboardEntry> list) {
+    final top1 = list.isNotEmpty ? list[0] : _fallbackEntries[0];
+    final top2 = list.length > 1 ? list[1] : _fallbackEntries[1];
+    final top3 = list.length > 2 ? list[2] : _fallbackEntries[2];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -658,21 +697,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
+  bool _isMe(LeaderboardEntry entry) {
+    if (_myPlayerName.isEmpty || _myPlayerName == 'EXPLORER') return false;
+    final entryClean = entry.name.trim().toLowerCase();
+    final myClean = _myPlayerName.trim().toLowerCase();
+    return entryClean == myClean || entryClean.contains(myClean) || myClean.contains(entryClean);
+  }
+
   // ─── ROSTER RANK CARD (#4 onwards) ──────────────────────────────────────────
   Widget _buildRankCard(LeaderboardEntry entry) {
-    final bool isUser = entry.name.contains('(You)');
+    final bool isUser = _isMe(entry);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isUser ? const Color(0xFF28283D) : const Color(0xFF1E1E32),
+        color: isUser ? const Color(0xFF1E3A28) : const Color(0xFF1E1E32),
         border: Border.all(
-          color: isUser ? const Color(0xFFF2CA50) : const Color(0xFF4D4635),
-          width: isUser ? 2 : 1,
+          color: isUser ? const Color(0xFF4ADE80) : const Color(0xFF4D4635),
+          width: isUser ? 2.5 : 1,
         ),
         boxShadow: isUser
             ? const [
-                BoxShadow(color: Colors.black, offset: Offset(2, 2), blurRadius: 0),
+                BoxShadow(
+                    color: Color(0x664ADE80), offset: Offset(2, 2), blurRadius: 4),
               ]
             : null,
       ),
@@ -682,8 +729,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFF141424),
-              border: Border.all(color: const Color(0xFF4D4635)),
+              color: isUser ? const Color(0xFF065F46) : const Color(0xFF141424),
+              border: Border.all(
+                  color: isUser ? const Color(0xFF4ADE80) : const Color(0xFF4D4635)),
             ),
             child: Text(
               '#${entry.rank}',
@@ -701,13 +749,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             height: 28,
             decoration: BoxDecoration(
               color: const Color(0xFF28283D),
-              border: Border.all(color: entry.avatarColor),
+              border: Border.all(
+                  color: isUser ? const Color(0xFF4ADE80) : entry.avatarColor),
             ),
             child: Center(
               child: Text(
                 entry.avatarInitial,
                 style: GoogleFonts.pressStart2p(
-                    fontSize: 10, color: entry.avatarColor),
+                    fontSize: 10,
+                    color: isUser ? const Color(0xFF4ADE80) : entry.avatarColor),
               ),
             ),
           ),
@@ -718,13 +768,35 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.pressStart2p(
-                    fontSize: 8,
-                    color: Colors.white,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.pressStart2p(
+                          fontSize: 8,
+                          color: isUser ? const Color(0xFF4ADE80) : Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (isUser) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2CA50),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        child: Text(
+                          'YOU',
+                          style: GoogleFonts.pressStart2p(
+                              fontSize: 6, color: Colors.black),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -754,7 +826,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               InkWell(
                 onTap: () => _inspectPlayer(entry),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFF28283D),
                     border: Border.all(color: const Color(0xFFF2CA50)),
@@ -776,17 +849,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // ─── STICKY PERSONAL RANK BAR ───────────────────────────────────────────────
-  Widget _buildStickyPersonalBar() {
+  Widget _buildStickyPersonalBar(List<LeaderboardEntry> list) {
+    final myIndex = list.indexWhere((e) => _isMe(e));
+    final LeaderboardEntry myEntry = myIndex >= 0
+        ? list[myIndex]
+        : (list.isNotEmpty ? list.first : _fallbackEntries.first);
+    final int myRank = myIndex >= 0 ? myIndex + 1 : list.length + 1;
+    final String rankBadge = myRank <= 3 ? 'TOP 1% 🏆' : myRank <= 10 ? 'TOP 5% ⚔️' : 'SCHOLAR 📜';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E32),
-        border: Border.all(color: const Color(0xFFF2CA50), width: 2),
+        color: const Color(0xFF1B3D2B),
+        border: Border.all(color: const Color(0xFF4ADE80), width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Colors.black,
-            offset: Offset(3, 3),
-            blurRadius: 0,
+            color: Color(0x884ADE80),
+            offset: Offset(2, 2),
+            blurRadius: 4,
           ),
         ],
       ),
@@ -802,7 +882,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'YOUR RANK: #14 (TOP 5%)',
+                    'YOUR RANK: #$myRank ($rankBadge)',
                     style: GoogleFonts.pressStart2p(
                       fontSize: 7.5,
                       color: const Color(0xFFF2CA50),
@@ -810,10 +890,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'ALEX ROVER • 18,450 XP • 12D STREAK',
+                    '$_myPlayerName • ${myEntry.score} XP • LVL ${myEntry.level}',
                     style: GoogleFonts.pressStart2p(
                       fontSize: 6.5,
-                      color: const Color(0xFFD0C5AF),
+                      color: const Color(0xFFE2E8F0),
                     ),
                   ),
                 ],
@@ -823,14 +903,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0xFF28283D),
-              border: Border.all(color: const Color(0xFF82C0A0)),
+              color: const Color(0xFF065F46),
+              border: Border.all(color: const Color(0xFF4ADE80)),
             ),
             child: Text(
-              '▲ +2 TODAY',
+              '▲ TOP 3%',
               style: GoogleFonts.pressStart2p(
                 fontSize: 6.5,
-                color: const Color(0xFF82C0A0),
+                color: const Color(0xFF4ADE80),
               ),
             ),
           ),

@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/player_profile.dart';
+import '../services/api_service.dart';
 
 class FriendModel {
   final String id;
@@ -33,7 +36,38 @@ class FriendModel {
   });
 }
 
+class PendingFriendRequestModel {
+  final String friendshipId;
+  final FriendModel user;
+
+  const PendingFriendRequestModel({
+    required this.friendshipId,
+    required this.user,
+  });
+}
+
+class GuildModel {
+  final String id;
+  final String name;
+  final String tag;
+  final String motto;
+  final int memberCount;
+  final int maxMembers;
+  final int level;
+
+  const GuildModel({
+    required this.id,
+    required this.name,
+    required this.tag,
+    required this.motto,
+    required this.memberCount,
+    required this.maxMembers,
+    required this.level,
+  });
+}
+
 class GuildMemberModel {
+  final String id;
   final String name;
   final String role;
   final int level;
@@ -41,6 +75,7 @@ class GuildMemberModel {
   final bool isOnline;
 
   const GuildMemberModel({
+    required this.id,
     required this.name,
     required this.role,
     required this.level,
@@ -63,9 +98,6 @@ class GuildChatMessage {
   });
 }
 
-/// Authentic 16-Bit RPG Social & Guild Hall Screen.
-/// Features chiseled obsidian containers, double-gold pixel borders (#F2CA50),
-/// 0-blur pixel shadows, Press Start 2P typography, and stepped progress bars.
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key});
 
@@ -75,239 +107,493 @@ class SocialScreen extends StatefulWidget {
 
 class _SocialScreenState extends State<SocialScreen> {
   int _activeRailIndex = 0; // 0: Friends, 1: Guild, 2: Add
-  late FriendModel _selectedFriend;
+  int _guildSubTab = 0; // 0: My Guild, 1: Create Guild, 2: Join Guild
 
+  FriendModel? _selectedFriend;
+  List<FriendModel> _allAvailableProfiles = [];
+  List<FriendModel> _myAcceptedFriends = [];
+  List<PendingFriendRequestModel> _pendingReceivedList = [];
+  Set<String> _pendingSentFriendIds = {};
+  bool _isLoading = true;
+
+  // Guild State
+  bool _hasGuild = false;
+  String _myGuildId = '';
+  String _myGuildName = '';
+  String _myGuildTag = '';
+  String _myGuildMotto = '';
+  String _myGuildRole = 'Member';
+  List<GuildMemberModel> _guildMembers = [];
+  List<GuildChatMessage> _chatMessages = [];
+  List<GuildModel> _publicGuilds = [];
+
+  // Form Controllers
+  final TextEditingController _createGuildNameController = TextEditingController();
+  final TextEditingController _createGuildTagController = TextEditingController();
+  final TextEditingController _createGuildMottoController = TextEditingController();
   final TextEditingController _chatController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
-  static const List<FriendModel> _friends = [
-    FriendModel(
-      id: 'f1',
-      name: 'Elena Vance',
-      title: 'Grand Sorceress',
-      level: 18,
-      xp: 14200,
-      avatarInitial: 'E',
-      avatarColor: Color(0xFFDEB7FF),
-      district: 'Math Tower',
-      isOnline: true,
-      lastActive: 'Active Now',
-      streakDays: 14,
-      guildName: 'Order of Arcanists',
-      subjectProgress: {'Math': 0.95, 'Physics': 0.70, 'History': 0.85},
-    ),
-    FriendModel(
-      id: 'f2',
-      name: 'Marcus Sol',
-      title: 'Quantum Explorer',
-      level: 16,
-      xp: 11850,
-      avatarInitial: 'M',
-      avatarColor: Color(0xFF60A5FA),
-      district: 'Physics Lab',
-      isOnline: true,
-      lastActive: 'Active Now',
-      streakDays: 21,
-      guildName: 'Order of Arcanists',
-      subjectProgress: {'Math': 0.60, 'Physics': 0.98, 'CS': 0.80},
-    ),
-    FriendModel(
-      id: 'f3',
-      name: 'Lyra Moon',
-      title: 'Royal Archivist',
-      level: 15,
-      xp: 9900,
-      avatarInitial: 'L',
-      avatarColor: Color(0xFFF2CA50),
-      district: 'Royal Archives',
-      isOnline: false,
-      lastActive: '2h ago',
-      streakDays: 7,
-      guildName: 'Library Scholars',
-      subjectProgress: {'History': 0.99, 'Literature': 0.90, 'Math': 0.40},
-    ),
-    FriendModel(
-      id: 'f4',
-      name: 'Kaelen Drake',
-      title: 'Code Weaver',
-      level: 13,
-      xp: 7600,
-      avatarInitial: 'K',
-      avatarColor: Color(0xFF82C0A0),
-      district: 'CS Citadel',
-      isOnline: false,
-      lastActive: '1d ago',
-      streakDays: 5,
-      guildName: 'Order of Arcanists',
-      subjectProgress: {'CS': 0.92, 'Math': 0.75, 'Physics': 0.50},
-    ),
-  ];
-
-  static const List<GuildMemberModel> _guildMembers = [
-    GuildMemberModel(
-        name: 'Alex Rover (You)',
-        role: 'Guild Master',
-        level: 14,
-        weeklyXp: 2450,
-        isOnline: true),
-    GuildMemberModel(
-        name: 'Elena Vance',
-        role: 'Officer',
-        level: 18,
-        weeklyXp: 3100,
-        isOnline: true),
-    GuildMemberModel(
-        name: 'Marcus Sol',
-        role: 'Officer',
-        level: 16,
-        weeklyXp: 2800,
-        isOnline: true),
-    GuildMemberModel(
-        name: 'Kaelen Drake',
-        role: 'Member',
-        level: 13,
-        weeklyXp: 1950,
-        isOnline: false),
-  ];
-
-  final List<GuildChatMessage> _chatMessages = [
-    const GuildChatMessage(
-        sender: 'Elena Vance',
-        role: 'Officer',
-        text: 'Ready for tonight\'s Weekly Guild Raid?',
-        time: '18:42'),
-    const GuildChatMessage(
-        sender: 'Marcus Sol',
-        role: 'Officer',
-        text: 'Just finished Physics trial 4. Got extra energy potion!',
-        time: '18:45'),
-  ];
+  String _myPlayerName = 'Explorer';
+  String _myUserId = 'demo-user-123';
 
   @override
   void initState() {
     super.initState();
-    _selectedFriend = _friends[0];
+    _loadStateAndProfiles();
   }
 
-  @override
-  void dispose() {
-    _chatController.dispose();
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _loadStateAndProfiles() async {
+    final profile = PlayerProfile.current ?? await PlayerProfile.load();
+    if (profile != null) {
+      if (profile.name.trim().isNotEmpty) _myPlayerName = profile.name.trim();
+      if (profile.id.trim().isNotEmpty) _myUserId = profile.id.trim();
+    }
+
+    try {
+      // 1. Fetch Friends & Explorers
+      final friendsRes = await ApiService.get('/api/social/friends?userId=$_myUserId');
+      if (friendsRes.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(friendsRes.bodyBytes)) as Map<String, dynamic>;
+
+        final rawExplorers = data['availableExplorers'] as List<dynamic>? ?? [];
+        final rawFriends = data['friends'] as List<dynamic>? ?? [];
+        final rawPendingReceived = data['pendingReceived'] as List<dynamic>? ?? [];
+        final rawPendingSent = data['pendingSent'] as List<dynamic>? ?? [];
+
+        final colors = [
+          const Color(0xFFDEB7FF),
+          const Color(0xFF60A5FA),
+          const Color(0xFFF2CA50),
+          const Color(0xFF82C0A0)
+        ];
+
+        FriendModel parseFriendModel(Map<String, dynamic> p, int i) {
+          final name = (p['name'] as String? ?? 'Explorer').trim();
+          final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'E';
+          return FriendModel(
+            id: p['id'] as String? ?? 'f_$i',
+            name: name,
+            title: p['title'] as String? ?? p['learning_goal'] as String? ?? 'Civilization Architect',
+            level: p['level'] as int? ?? 1,
+            xp: p['xp'] as int? ?? 100,
+            avatarInitial: initial,
+            avatarColor: colors[i % colors.length],
+            district: p['district'] as String? ?? 'Academy District',
+            isOnline: true,
+            lastActive: 'Active Now',
+            streakDays: p['streakDays'] as int? ?? p['streak_days'] as int? ?? 7,
+            guildName: p['guildName'] as String? ?? p['guild_name'] as String? ?? 'Academy District',
+            subjectProgress: {'Math': 0.85, 'CS': 0.90, 'Physics': 0.75},
+          );
+        }
+
+        final parsedExplorers = <FriendModel>[];
+        for (int i = 0; i < rawExplorers.length; i++) {
+          parsedExplorers.add(parseFriendModel(rawExplorers[i] as Map<String, dynamic>, i));
+        }
+
+        final parsedFriends = <FriendModel>[];
+        for (int i = 0; i < rawFriends.length; i++) {
+          parsedFriends.add(parseFriendModel(rawFriends[i] as Map<String, dynamic>, i));
+        }
+
+        final parsedPendingReceived = <PendingFriendRequestModel>[];
+        for (int i = 0; i < rawPendingReceived.length; i++) {
+          final item = rawPendingReceived[i] as Map<String, dynamic>;
+          final u = item['user'] as Map<String, dynamic>? ?? {};
+          parsedPendingReceived.add(PendingFriendRequestModel(
+            friendshipId: item['friendshipId'] as String? ?? 'req_$i',
+            user: parseFriendModel(u, i),
+          ));
+        }
+
+        final parsedPendingSent = <String>{};
+        for (final item in rawPendingSent) {
+          parsedPendingSent.add(item.toString());
+        }
+
+        if (mounted) {
+          setState(() {
+            _allAvailableProfiles = parsedExplorers;
+            _myAcceptedFriends = parsedFriends;
+            _pendingReceivedList = parsedPendingReceived;
+            _pendingSentFriendIds = parsedPendingSent;
+            if (_myAcceptedFriends.isNotEmpty && _selectedFriend == null) {
+              _selectedFriend = _myAcceptedFriends.first;
+            }
+          });
+        }
+      }
+
+      // 2. Fetch Guild Data
+      await _loadGuildData();
+    } catch (e) {
+      debugPrint('❌ [SocialScreen Load Error]: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  void _sendGift(FriendModel friend) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.bolt_rounded, color: Color(0xFF82C0A0)),
-            const SizedBox(width: 8),
-            Text(
-              'SENT +5 ENERGY TO ${friend.name.toUpperCase()}!',
-              style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+  Future<void> _loadGuildData() async {
+    try {
+      // Fetch My Guild
+      final myGuildRes = await ApiService.get('/api/guilds/my?userId=$_myUserId');
+      if (myGuildRes.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(myGuildRes.bodyBytes)) as Map<String, dynamic>;
+        final g = data['guild'] as Map<String, dynamic>?;
+        final membersList = data['members'] as List<dynamic>? ?? [];
+        final messagesList = data['messages'] as List<dynamic>? ?? [];
+
+        if (g != null) {
+          _hasGuild = true;
+          _myGuildId = g['id'] as String? ?? '';
+          _myGuildName = g['name'] as String? ?? '';
+          _myGuildTag = g['tag'] as String? ?? '';
+          _myGuildMotto = g['motto'] as String? ?? '';
+
+          _guildMembers = membersList.map((m) {
+            final mm = m as Map<String, dynamic>;
+            return GuildMemberModel(
+              id: mm['user_id'] as String? ?? mm['id'] as String? ?? '',
+              name: mm['name'] as String? ?? 'Scholar',
+              role: mm['role'] as String? ?? 'Member',
+              level: mm['level'] as int? ?? 1,
+              weeklyXp: mm['weekly_xp'] as int? ?? 0,
+              isOnline: mm['is_online'] as bool? ?? true,
+            );
+          }).toList();
+
+          final meMember = _guildMembers.firstWhere(
+            (m) => m.id == _myUserId || m.name.toLowerCase() == _myPlayerName.toLowerCase(),
+            orElse: () => GuildMemberModel(id: _myUserId, name: _myPlayerName, role: 'Member', level: 1, weeklyXp: 0, isOnline: true),
+          );
+          _myGuildRole = meMember.role;
+
+          _chatMessages = messagesList.map((msg) {
+            final m = msg as Map<String, dynamic>;
+            final timeStr = m['created_at'] != null
+                ? DateTime.tryParse(m['created_at'] as String)?.toLocal().toString().substring(11, 16) ?? 'Now'
+                : 'Now';
+            return GuildChatMessage(
+              sender: m['sender_name'] as String? ?? 'Scholar',
+              role: m['role'] as String? ?? 'Member',
+              text: m['text'] as String? ?? '',
+              time: timeStr,
+            );
+          }).toList();
+        } else {
+          _hasGuild = false;
+          _myGuildId = '';
+          _myGuildName = '';
+          _myGuildTag = '';
+          _myGuildMotto = '';
+          _guildMembers = [];
+          _chatMessages = [];
+        }
+      }
+
+      // Fetch Public Guilds Directory
+      final allGuildsRes = await ApiService.get('/api/guilds');
+      if (allGuildsRes.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(allGuildsRes.bodyBytes)) as Map<String, dynamic>;
+        final guildsList = data['guilds'] as List<dynamic>? ?? [];
+        _publicGuilds = guildsList.map((g) {
+          final gg = g as Map<String, dynamic>;
+          return GuildModel(
+            id: gg['id'] as String? ?? '',
+            name: gg['name'] as String? ?? '',
+            tag: gg['tag'] as String? ?? '',
+            motto: gg['motto'] as String? ?? '',
+            memberCount: gg['member_count'] as int? ?? 1,
+            maxMembers: gg['max_members'] as int? ?? 20,
+            level: gg['level'] as int? ?? 1,
+          );
+        }).toList();
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('❌ [Load Guild Error]: $e');
+    }
+  }
+
+  Future<void> _sendFriendRequest(FriendModel target) async {
+    setState(() {
+      _pendingSentFriendIds.add(target.id);
+    });
+
+    try {
+      final res = await ApiService.post('/api/social/friends/request', body: {
+        'requesterId': _myUserId,
+        'addresseeId': target.id,
+      });
+      if (res.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('FRIEND REQUEST SENT TO ${target.name.toUpperCase()}!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [Send Request Error]: $e');
+    }
+  }
+
+  Future<void> _respondFriendRequest(PendingFriendRequestModel pending, bool accept) async {
+    try {
+      final res = await ApiService.post('/api/social/friends/respond', body: {
+        'friendshipId': pending.friendshipId,
+        'accept': accept,
+      });
+      if (res.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(accept
+                  ? 'ACCEPTED ${pending.user.name.toUpperCase()} AS A FRIEND!'
+                  : 'DECLINED FRIEND REQUEST.'),
             ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF1E1E32),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+          );
+        }
+        await _loadStateAndProfiles();
+      }
+    } catch (e) {
+      debugPrint('❌ [Respond Request Error]: $e');
+    }
   }
 
-  void _challengeFriend(FriendModel friend) {
-    showDialog(
+  Future<void> _createGuild() async {
+    final name = _createGuildNameController.text.trim();
+    final tag = _createGuildTagController.text.trim().toUpperCase();
+    final motto = _createGuildMottoController.text.trim();
+
+    if (name.isEmpty || tag.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PLEASE ENTER GUILD NAME AND TAG!')),
+      );
+      return;
+    }
+
+    try {
+      final res = await ApiService.post('/api/guilds/create', body: {
+        'leaderId': _myUserId,
+        'name': name,
+        'tag': tag,
+        'motto': motto.isNotEmpty ? motto : 'Knowledge is the Ultimate Spell',
+      });
+
+      if (res.statusCode == 200) {
+        _createGuildNameController.clear();
+        _createGuildTagController.clear();
+        _createGuildMottoController.clear();
+
+        await _loadGuildData();
+        if (mounted) {
+          setState(() {
+            _guildSubTab = 0;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('GUILD "$name" CREATED! YOU ARE GUILD LEADER.')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [Create Guild Error]: $e');
+    }
+  }
+
+  Future<void> _joinGuild(GuildModel guild) async {
+    try {
+      final res = await ApiService.post('/api/guilds/join', body: {
+        'userId': _myUserId,
+        'guildId': guild.id,
+      });
+
+      if (res.statusCode == 200) {
+        await _loadGuildData();
+        if (mounted) {
+          setState(() {
+            _guildSubTab = 0;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('JOINED GUILD "${guild.name}"!')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [Join Guild Error]: $e');
+    }
+  }
+
+  Future<void> _leaveGuild() async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(0),
-          side: const BorderSide(color: Color(0xFFF2CA50), width: 2),
+        shape: const RoundedRectangleBorder(
+          side: BorderSide(color: Color(0xFFFF6B6B), width: 2),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.exit_to_app_rounded, color: Color(0xFFFF6B6B)),
+            const SizedBox(width: 8),
+            Text('LEAVE GUILD?', style: GoogleFonts.pressStart2p(fontSize: 10, color: const Color(0xFFFF6B6B))),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to leave "$_myGuildName"?',
+          style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFFD0C5AF), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('CANCEL', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF93000A),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('LEAVE GUILD', style: GoogleFonts.pressStart2p(fontSize: 8)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.post('/api/guilds/leave', body: {
+          'userId': _myUserId,
+          'guildId': _myGuildId,
+        });
+        await _loadGuildData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('YOU HAVE LEFT THE GUILD.')),
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ [Leave Guild Error]: $e');
+      }
+    }
+  }
+
+  Future<void> _sendGuildChatMessage() async {
+    final text = _chatController.text.trim();
+    if (text.isEmpty || !_hasGuild || _myGuildId.isEmpty) return;
+
+    _chatController.clear();
+
+    try {
+      final res = await ApiService.post('/api/guilds/chat', body: {
+        'guildId': _myGuildId,
+        'senderId': _myUserId,
+        'text': text,
+      });
+
+      if (res.statusCode == 200) {
+        await _loadGuildData();
+      }
+    } catch (e) {
+      debugPrint('❌ [Send Guild Chat Error]: $e');
+    }
+  }
+
+  void _challengeFriend(FriendModel friend) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E32),
+        shape: const RoundedRectangleBorder(
+          side: BorderSide(color: Color(0xFFF2CA50), width: 2),
         ),
         title: Row(
           children: [
             const Icon(Icons.sports_esports_rounded, color: Color(0xFFF2CA50)),
             const SizedBox(width: 10),
-            Text(
-              'QUIZ DUEL',
-              style: GoogleFonts.pressStart2p(
-                fontSize: 11,
-                color: const Color(0xFFF2CA50),
-              ),
-            ),
+            Text('QUIZ DUEL', style: GoogleFonts.pressStart2p(fontSize: 11, color: const Color(0xFFF2CA50))),
           ],
         ),
         content: Text(
           'Challenge ${friend.name} to a speed quiz duel in ${friend.district}?\n\nENTRY STAKE: 50 COINS 🪙',
-          style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFD0C5AF)),
+          style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFD0C5AF), height: 1.4),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'CANCEL',
-              style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white54),
-            ),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('CANCEL', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF2CA50),
               foregroundColor: Colors.black,
-              shape: const RoundedRectangleBorder(),
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'DUEL CHALLENGE SENT TO ${friend.name.toUpperCase()}!',
-                    style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
-                  ),
-                  backgroundColor: const Color(0xFF1E1E32),
-                ),
-              );
-            },
-            child: Text(
-              'SEND DUEL',
-              style: GoogleFonts.pressStart2p(fontSize: 8),
-            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('SEND DUEL', style: GoogleFonts.pressStart2p(fontSize: 8)),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.post('/api/social/duel/challenge', body: {
+          'challengerId': _myUserId,
+          'challengedId': friend.id,
+          'buildingId': 'code',
+          'subject': friend.district,
+          'stakeCoins': 50,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('DUEL CHALLENGE SENT TO ${friend.name.toUpperCase()}!',
+                  style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+              backgroundColor: const Color(0xFF1E1E32),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ [Duel Challenge Error]: $e');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F0F1A),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Color(0xFFF2CA50)),
+              const SizedBox(height: 12),
+              Text('LOADING SOCIAL HALL...', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
       body: SafeArea(
         child: Column(
           children: [
-            // Top Header Bar
             _buildTopHeaderBar(context),
-
-            // Main Dual-Pane Viewport
             Expanded(
               child: Row(
                 children: [
-                  // 1. Left Side Navigation Rail
                   _buildNavRail(),
-
-                  // Vertical Gold Pixel Separator
                   Container(width: 2, color: const Color(0xFFF2CA50)),
-
-                  // 2. Center-Left Master Panel (280px width)
                   SizedBox(
                     width: 280,
                     child: _buildMasterPanel(),
                   ),
-
-                  // Vertical Pixel Separator
                   Container(width: 2, color: const Color(0xFF4D4635)),
-
-                  // 3. Right Detail Inspector Showcase (Remaining space)
                   Expanded(
                     child: _buildDetailInspectorPanel(),
                   ),
@@ -323,14 +609,9 @@ class _SocialScreenState extends State<SocialScreen> {
   Widget _buildTopHeaderBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E32),
-        border: const Border(
-          bottom: BorderSide(color: Color(0xFFF2CA50), width: 2),
-        ),
-        boxShadow: const [
-          BoxShadow(color: Colors.black, offset: Offset(0, 3), blurRadius: 0),
-        ],
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E32),
+        border: Border(bottom: BorderSide(color: Color(0xFFF2CA50), width: 2)),
       ),
       child: Row(
         children: [
@@ -344,40 +625,26 @@ class _SocialScreenState extends State<SocialScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: Color(0xFFF2CA50), size: 12),
+                  const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFFF2CA50), size: 12),
                   const SizedBox(width: 4),
-                  Text(
-                    'BACK',
-                    style: GoogleFonts.pressStart2p(
-                      fontSize: 8,
-                      color: const Color(0xFFF2CA50),
-                    ),
-                  ),
+                  Text('BACK', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
                 ],
               ),
             ),
           ),
           const SizedBox(width: 14),
-
           Expanded(
             child: Row(
               children: [
-                const Icon(Icons.groups_rounded,
-                    color: Color(0xFFF2CA50), size: 18),
+                const Icon(Icons.groups_rounded, color: Color(0xFFF2CA50), size: 18),
                 const SizedBox(width: 8),
                 Text(
                   'SOCIAL & GUILD HALL',
-                  style: GoogleFonts.pressStart2p(
-                    fontSize: 10,
-                    color: const Color(0xFFF2CA50),
-                  ),
+                  style: GoogleFonts.pressStart2p(fontSize: 10, color: const Color(0xFFF2CA50)),
                 ),
               ],
             ),
           ),
-
-          // 16-Bit Online Status Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -386,21 +653,9 @@ class _SocialScreenState extends State<SocialScreen> {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF82C0A0),
-                  ),
-                ),
+                Container(width: 8, height: 8, color: const Color(0xFF82C0A0)),
                 const SizedBox(width: 6),
-                Text(
-                  '3 ONLINE',
-                  style: GoogleFonts.pressStart2p(
-                    fontSize: 7,
-                    color: const Color(0xFF82C0A0),
-                  ),
-                ),
+                Text('ONLINE', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFF82C0A0))),
               ],
             ),
           ),
@@ -409,7 +664,6 @@ class _SocialScreenState extends State<SocialScreen> {
     );
   }
 
-  // ─── 1. LEFT NAVIGATION RAIL ────────────────────────────────────────────────
   Widget _buildNavRail() {
     final navItems = [
       {'label': 'FRIENDS', 'icon': Icons.people_alt_rounded},
@@ -437,34 +691,19 @@ class _SocialScreenState extends State<SocialScreen> {
                   color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF3C382A),
                   width: 2,
                 ),
-                boxShadow: isSelected
-                    ? const [
-                        BoxShadow(
-                            color: Colors.black,
-                            offset: Offset(2, 2),
-                            blurRadius: 0),
-                      ]
-                    : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    item['icon'] as IconData,
-                    color: isSelected
-                        ? const Color(0xFFF2CA50)
-                        : const Color(0xFF8C867A),
-                    size: 20,
-                  ),
+                  Icon(item['icon'] as IconData,
+                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A), size: 20),
                   const SizedBox(height: 6),
                   Text(
                     item['label'] as String,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.pressStart2p(
                       fontSize: 7.5,
-                      color: isSelected
-                          ? const Color(0xFFF2CA50)
-                          : const Color(0xFF8C867A),
+                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A),
                     ),
                   ),
                 ],
@@ -476,7 +715,6 @@ class _SocialScreenState extends State<SocialScreen> {
     );
   }
 
-  // ─── 2. CENTER-LEFT MASTER PANEL ───────────────────────────────────────────
   Widget _buildMasterPanel() {
     return Container(
       color: const Color(0xFF18182B),
@@ -486,178 +724,562 @@ class _SocialScreenState extends State<SocialScreen> {
         children: [
           Text(
             _activeRailIndex == 0
-                ? 'EXPLORERS LIST'
+                ? 'MY FRIENDS (${_myAcceptedFriends.length})'
                 : _activeRailIndex == 1
-                    ? 'GUILD ROSTER'
-                    : 'ADD FRIENDS',
-            style: GoogleFonts.pressStart2p(
-              fontSize: 8,
-              color: const Color(0xFFF2CA50),
-            ),
+                    ? 'GUILD HALL'
+                    : 'SEARCH SCHOLARS',
+            style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50)),
           ),
           const SizedBox(height: 10),
-
-          Expanded(
-            child: _activeRailIndex == 2
-                ? Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E32),
-                          border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SEARCH EXPLORER',
-                              style: GoogleFonts.pressStart2p(
-                                fontSize: 7,
-                                color: const Color(0xFFF2CA50),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _searchController,
-                              style: GoogleFonts.pressStart2p(
-                                  color: Colors.white, fontSize: 8),
-                              decoration: InputDecoration(
-                                hintText: 'TAG #KV-8924...',
-                                hintStyle: GoogleFonts.pressStart2p(
-                                    color: Colors.white38, fontSize: 7),
-                                filled: true,
-                                fillColor: const Color(0xFF141424),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 8),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(0),
-                                  borderSide: const BorderSide(
-                                      color: Color(0xFF4D4635)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    itemCount: _activeRailIndex == 0
-                        ? _friends.length
-                        : _guildMembers.length,
-                    itemBuilder: (ctx, i) {
-                      if (_activeRailIndex == 0) {
-                        final friend = _friends[i];
-                        final isSelected = friend.id == _selectedFriend.id;
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedFriend = friend),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF28283D)
-                                  : const Color(0xFF1E1E32),
-                              border: Border.all(
-                                color: isSelected
-                                    ? const Color(0xFFF2CA50)
-                                    : const Color(0xFF4D4635),
-                                width: isSelected ? 2 : 1,
-                              ),
-                              boxShadow: isSelected
-                                  ? const [
-                                      BoxShadow(
-                                          color: Colors.black,
-                                          offset: Offset(2, 2),
-                                          blurRadius: 0),
-                                    ]
-                                  : null,
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF28283D),
-                                    border: Border.all(color: friend.avatarColor),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      friend.avatarInitial,
-                                      style: GoogleFonts.pressStart2p(
-                                          fontSize: 10, color: friend.avatarColor),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        friend.name,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.pressStart2p(
-                                          fontSize: 8,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        friend.district,
-                                        style: GoogleFonts.pressStart2p(
-                                          fontSize: 6.5,
-                                          color: const Color(0xFFD0C5AF),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      } else {
-                        final m = _guildMembers[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1E32),
-                            border: Border.all(color: const Color(0xFF4D4635)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                m.name,
-                                style: GoogleFonts.pressStart2p(
-                                    fontSize: 7.5, color: Colors.white),
-                              ),
-                              Text(
-                                m.role,
-                                style: GoogleFonts.pressStart2p(
-                                    fontSize: 6.5, color: const Color(0xFFF2CA50)),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    },
-                  ),
-          ),
+          Expanded(child: _buildMasterContent()),
         ],
       ),
     );
   }
 
-  // ─── 3. RIGHT DETAIL INSPECTOR SHOWCASE ──────────────────────────────────────
+  Widget _buildMasterContent() {
+    if (_activeRailIndex == 0) {
+      // FRIENDS TAB
+      if (_pendingReceivedList.isEmpty && _myAcceptedFriends.isEmpty) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          color: const Color(0xFF1E1E32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.people_outline_rounded, color: Color(0xFFF2CA50), size: 36),
+              const SizedBox(height: 12),
+              Text('NO FRIENDS YET', style: GoogleFonts.pressStart2p(fontSize: 9, color: const Color(0xFFF2CA50))),
+              const SizedBox(height: 8),
+              Text(
+                'You have not added any friends yet.\n\nGo to the "ADD" tab, search a scholar\'s name, and send them a request!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFD0C5AF), height: 1.5),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView(
+        children: [
+          // Pending Received Section
+          if (_pendingReceivedList.isNotEmpty) ...[
+            Text('PENDING REQUESTS (${_pendingReceivedList.length})',
+                style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFFFB4AB))),
+            const SizedBox(height: 6),
+            ..._pendingReceivedList.map((req) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B1E1E),
+                  border: Border.all(color: const Color(0xFFFF6B6B)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(req.user.name, style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white)),
+                    ),
+                    InkWell(
+                      onTap: () => _respondFriendRequest(req, true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        color: const Color(0xFF82C0A0),
+                        child: Text('ACCEPT', style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.black)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => _respondFriendRequest(req, false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        color: const Color(0xFFFF6B6B),
+                        child: Text('DECLINE', style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.black)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+          ],
+
+          // Accepted Friends Section
+          if (_myAcceptedFriends.isNotEmpty) ...[
+            Text('ACCEPTED FRIENDS', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFF82C0A0))),
+            const SizedBox(height: 6),
+            ..._myAcceptedFriends.map((friend) {
+              final isSelected = _selectedFriend?.id == friend.id;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedFriend = friend),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF28283D) : const Color(0xFF1E1E32),
+                    border: Border.all(
+                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF4D4635),
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF28283D),
+                          border: Border.all(color: friend.avatarColor),
+                        ),
+                        child: Center(
+                          child: Text(
+                            friend.avatarInitial,
+                            style: GoogleFonts.pressStart2p(fontSize: 10, color: friend.avatarColor),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(friend.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+                            const SizedBox(height: 2),
+                            Text(friend.district,
+                                style: GoogleFonts.pressStart2p(fontSize: 6.5, color: const Color(0xFFD0C5AF))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ],
+      );
+    } else if (_activeRailIndex == 1) {
+      // GUILD TAB
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _buildGuildPill(0, 'MY GUILD'),
+              const SizedBox(width: 4),
+              _buildGuildPill(1, 'CREATE'),
+              const SizedBox(width: 4),
+              _buildGuildPill(2, 'JOIN'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(child: _buildGuildTabMasterContent()),
+        ],
+      );
+    } else {
+      // ADD FRIENDS TAB (SEARCH ONLY)
+      final query = _searchController.text.trim().toLowerCase();
+      final searchResults = query.isEmpty
+          ? <FriendModel>[]
+          : _allAvailableProfiles.where((p) => p.name.toLowerCase().contains(query)).toList();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E32),
+              border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 8),
+              decoration: InputDecoration(
+                hintText: 'TYPE EXPLORER NAME...',
+                hintStyle: GoogleFonts.pressStart2p(color: Colors.white38, fontSize: 7),
+                isDense: true,
+                border: InputBorder.none,
+                icon: const Icon(Icons.search, color: Color(0xFFF2CA50), size: 16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Expanded(
+            child: query.isEmpty
+                ? Container(
+                    padding: const EdgeInsets.all(12),
+                    color: const Color(0xFF1E1E32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search_rounded, color: Color(0xFFF2CA50), size: 32),
+                        const SizedBox(height: 10),
+                        Text('SEARCH TO ADD FRIENDS',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Type a user\'s name above to search for them in Hexafalls and send a friend request!',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white70, height: 1.5),
+                        ),
+                      ],
+                    ),
+                  )
+                : searchResults.isEmpty
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        color: const Color(0xFF1E1E32),
+                        child: Center(
+                          child: Text('NO EXPLORER FOUND WITH NAME "$query"',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFFF6B6B))),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: searchResults.length,
+                        itemBuilder: (ctx, i) {
+                          final p = searchResults[i];
+                          final isAccepted = _myAcceptedFriends.any((f) => f.id == p.id);
+                          final isSent = _pendingSentFriendIds.contains(p.id);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1E32),
+                              border: Border.all(color: const Color(0xFF4D4635)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  color: p.avatarColor,
+                                  child: Center(
+                                    child: Text(p.avatarInitial,
+                                        style: GoogleFonts.pressStart2p(fontSize: 9, color: Colors.black)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(p.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white)),
+                                ),
+                                InkWell(
+                                  onTap: (isAccepted || isSent) ? null : () => _sendFriendRequest(p),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isAccepted
+                                          ? const Color(0xFF28283D)
+                                          : isSent
+                                              ? const Color(0xFF3C3C50)
+                                              : const Color(0xFFF2CA50),
+                                      border: Border.all(color: const Color(0xFFF2CA50)),
+                                    ),
+                                    child: Text(
+                                      isAccepted
+                                          ? '✓ FRIEND'
+                                          : isSent
+                                              ? '⌛ SENT'
+                                              : '+ SEND REQ',
+                                      style: GoogleFonts.pressStart2p(
+                                        fontSize: 6.5,
+                                        color: (isAccepted || isSent) ? const Color(0xFFF2CA50) : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildGuildPill(int index, String label) {
+    final isSelected = _guildSubTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _guildSubTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF1E1E32),
+            border: Border.all(color: const Color(0xFFF2CA50)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.pressStart2p(
+              fontSize: 6.5,
+              color: isSelected ? Colors.black : const Color(0xFFF2CA50),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuildTabMasterContent() {
+    if (_guildSubTab == 0) {
+      // MY GUILD
+      if (!_hasGuild) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          color: const Color(0xFF1E1E32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.shield_outlined, color: Color(0xFFF2CA50), size: 36),
+              const SizedBox(height: 12),
+              Text('YOU ARE NOT IN A GUILD',
+                  style: GoogleFonts.pressStart2p(fontSize: 8.5, color: const Color(0xFFF2CA50))),
+              const SizedBox(height: 8),
+              Text(
+                'You have not joined or created a guild yet.\n\nChoose an option below to found your own guild or join an existing scholar order!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.white70, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF2CA50),
+                        foregroundColor: Colors.black,
+                      ),
+                      onPressed: () => setState(() => _guildSubTab = 1),
+                      child: Text('➕ CREATE GUILD', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF82C0A0),
+                        foregroundColor: Colors.black,
+                      ),
+                      onPressed: () => setState(() => _guildSubTab = 2),
+                      child: Text('🔍 JOIN GUILD', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Leave Guild Button
+          GestureDetector(
+            onTap: _leaveGuild,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A1010),
+                border: Border.all(color: const Color(0xFFFF6B6B), width: 1.5),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.exit_to_app_rounded, color: Color(0xFFFF6B6B), size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'LEAVE GUILD',
+                    style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFFFF6B6B)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Real Members List from DB
+          Text(
+            'GUILD MEMBERS (${_guildMembers.length})',
+            style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFF2CA50)),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _guildMembers.length,
+              itemBuilder: (ctx, i) {
+                final m = _guildMembers[i];
+                final isMe = m.id == _myUserId || m.name.toLowerCase() == _myPlayerName.toLowerCase();
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isMe ? const Color(0xFF1E3A28) : const Color(0xFF1E1E32),
+                    border: Border.all(
+                      color: isMe ? const Color(0xFF4ADE80) : const Color(0xFF4D4635),
+                      width: isMe ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isMe ? '${m.name} (YOU)' : m.name,
+                        style: GoogleFonts.pressStart2p(
+                          fontSize: 7.5,
+                          color: isMe ? const Color(0xFF4ADE80) : Colors.white,
+                        ),
+                      ),
+                      Text(
+                        m.role,
+                        style: GoogleFonts.pressStart2p(
+                          fontSize: 6.5,
+                          color: isMe ? const Color(0xFFF2CA50) : const Color(0xFFD0C5AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    } else if (_guildSubTab == 1) {
+      // CREATE GUILD FORM
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildGuildFormField('GUILD NAME', _createGuildNameController, 'e.g. Order of Arcanists'),
+            const SizedBox(height: 8),
+            _buildGuildFormField('GUILD TAG', _createGuildTagController, 'e.g. ARC'),
+            const SizedBox(height: 8),
+            _buildGuildFormField('GUILD MOTTO', _createGuildMottoController, 'e.g. Knowledge is Power'),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF2CA50),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              onPressed: _createGuild,
+              child: Text('CREATE GUILD 🚀', style: GoogleFonts.pressStart2p(fontSize: 7.5)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // JOIN GUILD LIST
+      if (_publicGuilds.isEmpty) {
+        return Center(
+          child: Text('NO GUILDS AVAILABLE YET.\nBE THE FIRST TO CREATE ONE!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.white54, height: 1.5)),
+        );
+      }
+
+      return ListView.builder(
+        itemCount: _publicGuilds.length,
+        itemBuilder: (ctx, i) {
+          final g = _publicGuilds[i];
+          final isCurrentGuild = _hasGuild && _myGuildId == g.id;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E32),
+              border: Border.all(color: const Color(0xFF4D4635)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('${g.name} [${g.tag}]', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFFF2CA50))),
+                    Text('LVL ${g.level}', style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white70)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(g.motto, style: GoogleFonts.pressStart2p(fontSize: 6.5, color: const Color(0xFFD0C5AF))),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: isCurrentGuild ? null : () => _joinGuild(g),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    color: isCurrentGuild ? const Color(0xFF4D4635) : const Color(0xFF82C0A0),
+                    alignment: Alignment.center,
+                    child: Text(
+                      isCurrentGuild ? '✓ CURRENT GUILD' : 'JOIN GUILD',
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 6.5,
+                        color: isCurrentGuild ? const Color(0xFFF2CA50) : Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Widget _buildGuildFormField(String label, TextEditingController ctrl, String hint) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.pressStart2p(fontSize: 6.5, color: const Color(0xFFF2CA50))),
+        const SizedBox(height: 4),
+        TextField(
+          controller: ctrl,
+          style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 7.5),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.pressStart2p(color: Colors.white38, fontSize: 6.5),
+            filled: true,
+            fillColor: const Color(0xFF141424),
+            contentPadding: const EdgeInsets.all(8),
+            border: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4D4635))),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDetailInspectorPanel() {
     if (_activeRailIndex == 0) {
-      // FRIEND INSPECTOR HOLOGRAPHIC CARD
+      final selected = _selectedFriend;
+      if (selected == null) {
+        return Container(
+          color: const Color(0xFF0F0F1A),
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Text(
+              'SELECT A FRIEND FROM THE LIST\nTO VIEW DETAILS & DUEL',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50)),
+            ),
+          ),
+        );
+      }
+
       return Container(
         color: const Color(0xFF0F0F1A),
         padding: const EdgeInsets.all(16),
@@ -665,18 +1287,11 @@ class _SocialScreenState extends State<SocialScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Player Top Banner
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1E32),
                   border: Border.all(color: const Color(0xFFF2CA50), width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                        color: Colors.black,
-                        offset: Offset(3, 3),
-                        blurRadius: 0),
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -685,13 +1300,12 @@ class _SocialScreenState extends State<SocialScreen> {
                       height: 50,
                       decoration: BoxDecoration(
                         color: const Color(0xFF28283D),
-                        border: Border.all(color: _selectedFriend.avatarColor, width: 2),
+                        border: Border.all(color: selected.avatarColor, width: 2),
                       ),
                       child: Center(
                         child: Text(
-                          _selectedFriend.avatarInitial,
-                          style: GoogleFonts.pressStart2p(
-                              fontSize: 18, color: _selectedFriend.avatarColor),
+                          selected.avatarInitial,
+                          style: GoogleFonts.pressStart2p(fontSize: 18, color: selected.avatarColor),
                         ),
                       ),
                     ),
@@ -700,90 +1314,31 @@ class _SocialScreenState extends State<SocialScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _selectedFriend.name,
-                            style: GoogleFonts.pressStart2p(
-                              fontSize: 10,
-                              color: const Color(0xFFF2CA50),
-                            ),
-                          ),
+                          Text(selected.name, style: GoogleFonts.pressStart2p(fontSize: 10, color: const Color(0xFFF2CA50))),
                           const SizedBox(height: 4),
-                          Text(
-                            '${_selectedFriend.title} • LVL ${_selectedFriend.level}',
-                            style: GoogleFonts.pressStart2p(
-                              fontSize: 7.5,
-                              color: Colors.white70,
-                            ),
-                          ),
+                          Text('${selected.title} • LVL ${selected.level}', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white70)),
                           const SizedBox(height: 4),
-                          Text(
-                            'GUILD: ${_selectedFriend.guildName.toUpperCase()}',
-                            style: GoogleFonts.pressStart2p(
-                              fontSize: 7,
-                              color: const Color(0xFFDEB7FF),
-                            ),
-                          ),
+                          Text('GUILD: ${selected.guildName.toUpperCase()}', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFDEB7FF))),
                         ],
                       ),
                     ),
-
-                    // Action Buttons
-                    Column(
-                      children: [
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF2CA50),
-                            foregroundColor: Colors.black,
-                            shape: const RoundedRectangleBorder(),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                          ),
-                          icon: const Icon(Icons.sports_esports_rounded,
-                              color: Colors.black, size: 14),
-                          label: Text(
-                            'DUEL',
-                            style: GoogleFonts.pressStart2p(
-                                fontSize: 7, color: Colors.black),
-                          ),
-                          onPressed: () => _challengeFriend(_selectedFriend),
-                        ),
-                        const SizedBox(height: 6),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF82C0A0),
-                            foregroundColor: Colors.black,
-                            shape: const RoundedRectangleBorder(),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                          ),
-                          icon: const Icon(Icons.bolt_rounded,
-                              color: Colors.black, size: 14),
-                          label: Text(
-                            'GIFT',
-                            style: GoogleFonts.pressStart2p(
-                                fontSize: 7, color: Colors.black),
-                          ),
-                          onPressed: () => _sendGift(_selectedFriend),
-                        ),
-                      ],
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF2CA50),
+                        foregroundColor: Colors.black,
+                      ),
+                      icon: const Icon(Icons.sports_esports_rounded, color: Colors.black, size: 14),
+                      label: Text('DUEL', style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.black)),
+                      onPressed: () => _challengeFriend(selected),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Subject Mastery Cards with Stepped Bars
-              Text(
-                'SUBJECT MASTERY & PROGRESS',
-                style: GoogleFonts.pressStart2p(
-                  fontSize: 8,
-                  color: const Color(0xFFF2CA50),
-                ),
-              ),
+              Text('SUBJECT MASTERY & PROGRESS', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
               const SizedBox(height: 10),
-
               Column(
-                children: _selectedFriend.subjectProgress.entries.map((e) {
+                children: selected.subjectProgress.entries.map((e) {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(10),
@@ -797,35 +1352,18 @@ class _SocialScreenState extends State<SocialScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              e.key.toUpperCase(),
-                              style: GoogleFonts.pressStart2p(
-                                  fontSize: 8, color: Colors.white),
-                            ),
-                            Text(
-                              '${(e.value * 100).toInt()}%',
-                              style: GoogleFonts.pressStart2p(
-                                  fontSize: 7.5,
-                                  color: const Color(0xFF82C0A0)),
-                            ),
+                            Text(e.key.toUpperCase(), style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+                            Text('${(e.value * 100).toInt()}%', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFF82C0A0))),
                           ],
                         ),
                         const SizedBox(height: 6),
-
-                        // 16-Bit Stepped Progress Channel
                         Container(
                           height: 8,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF141424),
-                            border: Border.all(
-                                color: const Color(0xFF4D4635), width: 1),
-                          ),
+                          color: const Color(0xFF141424),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
                             widthFactor: e.value,
-                            child: Container(
-                              color: const Color(0xFF82C0A0),
-                            ),
+                            child: Container(color: const Color(0xFF82C0A0)),
                           ),
                         ),
                       ],
@@ -838,22 +1376,35 @@ class _SocialScreenState extends State<SocialScreen> {
         ),
       );
     } else if (_activeRailIndex == 1) {
-      // GUILD CHAT & QUEST SHOWCASE
+      // GUILD CHAT PANEL
+      if (!_hasGuild) {
+        return Container(
+          color: const Color(0xFF0F0F1A),
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Text(
+              'JOIN OR CREATE A GUILD TO ACCESS\nTHE GUILD HALL CHAT',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50), height: 1.5),
+            ),
+          ),
+        );
+      }
+
       return Container(
         color: const Color(0xFF0F0F1A),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'GUILD HALL CHAT',
-              style: GoogleFonts.pressStart2p(
-                fontSize: 8.5,
-                color: const Color(0xFFF2CA50),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('$_myGuildName [$_myGuildTag] ($_myGuildRole)', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
+                Text(_myGuildMotto, style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white54)),
+              ],
             ),
             const SizedBox(height: 10),
-
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(10),
@@ -861,43 +1412,46 @@ class _SocialScreenState extends State<SocialScreen> {
                   color: const Color(0xFF1E1E32),
                   border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
                 ),
-                child: ListView.builder(
-                  itemCount: _chatMessages.length,
-                  itemBuilder: (ctx, i) {
-                    final msg = _chatMessages[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '[${msg.time}] ${msg.sender}: ${msg.text}',
-                        style: GoogleFonts.pressStart2p(
-                            fontSize: 7.5, color: const Color(0xFFD0C5AF)),
+                child: _chatMessages.isEmpty
+                    ? Center(
+                        child: Text('NO GUILD CHAT MESSAGES YET.\nBE THE FIRST TO POST!',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.white38, height: 1.5)),
+                      )
+                    : ListView.builder(
+                        itemCount: _chatMessages.length,
+                        itemBuilder: (ctx, i) {
+                          final msg = _chatMessages[i];
+                          final isMyMsg = msg.sender == _myPlayerName;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              '[${msg.time}] ${msg.sender}: ${msg.text}',
+                              style: GoogleFonts.pressStart2p(
+                                fontSize: 7.5,
+                                color: isMyMsg ? const Color(0xFF4ADE80) : const Color(0xFFD0C5AF),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ),
             const SizedBox(height: 8),
-
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _chatController,
-                    style: GoogleFonts.pressStart2p(
-                        color: Colors.white, fontSize: 8),
+                    style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 8),
+                    onSubmitted: (_) => _sendGuildChatMessage(),
                     decoration: InputDecoration(
                       hintText: 'POST TO GUILD CHAT...',
-                      hintStyle: GoogleFonts.pressStart2p(
-                          color: Colors.white38, fontSize: 7),
+                      hintStyle: GoogleFonts.pressStart2p(color: Colors.white38, fontSize: 7),
                       filled: true,
                       fillColor: const Color(0xFF141424),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(0),
-                        borderSide: const BorderSide(color: Color(0xFF4D4635)),
-                      ),
+                      contentPadding: const EdgeInsets.all(8),
+                      border: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4D4635))),
                     ),
                   ),
                 ),
@@ -906,30 +1460,10 @@ class _SocialScreenState extends State<SocialScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF2CA50),
                     foregroundColor: Colors.black,
-                    shape: const RoundedRectangleBorder(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                  onPressed: () {
-                    if (_chatController.text.trim().isNotEmpty) {
-                      setState(() {
-                        _chatMessages.add(
-                          GuildChatMessage(
-                            sender: 'Alex Rover',
-                            role: 'Guild Master',
-                            text: _chatController.text.trim(),
-                            time: 'Now',
-                          ),
-                        );
-                        _chatController.clear();
-                      });
-                    }
-                  },
-                  child: Text(
-                    'SEND',
-                    style: GoogleFonts.pressStart2p(
-                        fontSize: 8, color: Colors.black),
-                  ),
+                  onPressed: _sendGuildChatMessage,
+                  child: Text('SEND', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.black)),
                 ),
               ],
             ),
@@ -937,86 +1471,29 @@ class _SocialScreenState extends State<SocialScreen> {
         ),
       );
     } else {
-      // ADD FRIENDS PENDING REQUESTS
+      // ADD FRIENDS INFO
       return Container(
         color: const Color(0xFF0F0F1A),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'PENDING FRIEND REQUESTS (1)',
-              style: GoogleFonts.pressStart2p(
-                fontSize: 8.5,
-                color: const Color(0xFFF2CA50),
-              ),
-            ),
+            Text('ADD SCHOLARS TO YOUR CIRCLE', style: GoogleFonts.pressStart2p(fontSize: 8.5, color: const Color(0xFFF2CA50))),
             const SizedBox(height: 12),
-
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E32),
                 border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    color: const Color(0xFFDEB7FF),
-                    child: Center(
-                      child: Text('V',
-                          style: GoogleFonts.pressStart2p(
-                              fontSize: 12, color: Colors.black)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'VESPER NINE',
-                          style: GoogleFonts.pressStart2p(
-                            fontSize: 8.5,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Wants to join your circle',
-                          style: GoogleFonts.pressStart2p(
-                            fontSize: 7,
-                            color: const Color(0xFFD0C5AF),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF82C0A0),
-                      foregroundColor: Colors.black,
-                      shape: const RoundedRectangleBorder(),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                    ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'ACCEPTED VESPER NINE AS FRIEND!',
-                            style: GoogleFonts.pressStart2p(fontSize: 8),
-                          ),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'ACCEPT',
-                      style: GoogleFonts.pressStart2p(
-                          fontSize: 7.5, color: Colors.black),
-                    ),
+                  Text('💡 SEARCH & FRIEND REQUESTS', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFF82C0A0))),
+                  const SizedBox(height: 8),
+                  Text(
+                    '1. Type an Explorer Name in the search box on the left.\n2. Tap "+ SEND REQ" to send a pending request.\n3. The recipient accepts the request in their FRIENDS tab!\n4. Once accepted, you become official friends and can duel!',
+                    style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFD0C5AF), height: 1.5),
                   ),
                 ],
               ),

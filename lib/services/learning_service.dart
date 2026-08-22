@@ -49,6 +49,36 @@ class LearningService {
     return fallback;
   }
 
+  /// Submits quiz completion results to the backend to update XP, Coins, Level, and Supabase progress.
+  static Future<Map<String, dynamic>?> submitQuizResult({
+    required String buildingId,
+    required String subject,
+    required int correctAnswers,
+    required int totalQuestions,
+  }) async {
+    try {
+      final response = await ApiService.post(
+        '/api/learning/submit-quiz',
+        body: {
+          'building_id': buildingId,
+          'subject': subject,
+          'correct_answers': correctAnswers,
+          'total_questions': totalQuestions,
+        },
+        timeout: _timeout,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        debugPrint('✅ [LearningService]: Quiz submitted successfully! XP Earned: ${data['xp_earned']}');
+        return data;
+      }
+    } catch (e) {
+      debugPrint('❌ [LearningService]: Exception submitting quiz result: $e');
+    }
+    return null;
+  }
+
   /// Synthesizes speech for custom text (e.g., question reading, how-to-play tutorial).
   static Future<String?> fetchTTSAudioUrl(String text) async {
     if (text.trim().isEmpty) return null;

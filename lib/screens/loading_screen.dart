@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/player_profile.dart';
 import 'splash_screen.dart';
+import 'world_archipelago_screen.dart';
 
 /// "Knowledgeverse Loading Page" screen from Stitch.
 /// Features the exact local night forest castle background (loading_bg.png) with a transparent golden frame.
@@ -32,21 +34,28 @@ class _LoadingScreenState extends State<LoadingScreen>
       duration: const Duration(milliseconds: 2500),
     )..repeat(reverse: true);
 
-    _progressController.forward().then((_) {
+    _progressController.forward().then((_) async {
       if (!mounted) return;
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, anim1, anim2) => const SplashScreen(),
-            transitionsBuilder: (context, anim1, anim2, child) {
-              return FadeTransition(opacity: anim1, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
-      });
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      // Auto-login: check if user has a saved session
+      final savedProfile = await PlayerProfile.load();
+      final hasSession = savedProfile != null &&
+          savedProfile.name.trim().isNotEmpty;
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, anim1, anim2) => hasSession
+              ? WorldArchipelagoScreen(profile: savedProfile)
+              : const SplashScreen(),
+          transitionsBuilder: (context, anim1, anim2, child) =>
+              FadeTransition(opacity: anim1, child: child),
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+      );
     });
   }
 

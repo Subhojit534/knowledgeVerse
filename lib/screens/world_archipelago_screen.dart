@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../models/player_profile.dart';
 import '../services/theme_music_service.dart';
 import 'subject_loading_screen.dart';
 
@@ -49,7 +50,9 @@ const ColorFilter _grayscaleMatrix = ColorFilter.matrix(<double>[
 /// "Knowledgeverse Archipelago - Map" screen from Stitch.
 /// Guarantees background, islands, connection bridges, lock badges, and top/bottom app bars render 100% reliably.
 class WorldArchipelagoScreen extends StatefulWidget {
-  const WorldArchipelagoScreen({super.key});
+  const WorldArchipelagoScreen({super.key, this.profile});
+
+  final PlayerProfile? profile;
 
   static const List<SubjectIslandData> islands = [
     // 1. Mathematics (top centre)
@@ -185,6 +188,22 @@ class _WorldArchipelagoScreenState extends State<WorldArchipelagoScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    _syncProfile();
+  }
+
+  void _syncProfile() async {
+    final p = widget.profile ?? PlayerProfile.current ?? await PlayerProfile.load();
+    if (p != null) {
+      PlayerProfile.current = p;
+      if (p.subjects.isNotEmpty && mounted) {
+        setState(() {
+          for (final s in p.subjects) {
+            _unlockedSubjects.add(s);
+          }
+        });
+      }
+    }
   }
 
   @override

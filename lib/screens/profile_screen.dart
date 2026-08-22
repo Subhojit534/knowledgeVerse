@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/player_profile.dart';
+import '../services/api_service.dart';
 
 class SubjectDistrict {
   final String name;
@@ -30,7 +33,8 @@ class SubjectDistrict {
 /// ornate pixel frames with jeweled corner accents, and a perfectly fitted 3-stat panel
 /// (Streak, Focus XP, Diamonds) on the bottom-left.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final PlayerProfile? profile;
+  const ProfileScreen({super.key, this.profile});
 
   static const List<SubjectDistrict> subjects = [
     SubjectDistrict(
@@ -80,8 +84,11 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _playerName = 'ALEX ROVER';
-  final String _playerTitle = 'Civilization Architect';
+  String _playerName = 'WIZARD ARCHITECT';
+  String _playerTitle = 'Civilization Architect';
+  int _xp = 1450;
+  int _level = 4;
+  int _coins = 1240;
 
   @override
   void initState() {
@@ -90,13 +97,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadSavedProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('player_name');
-    if (name != null && name.trim().isNotEmpty) {
+    final active = widget.profile ?? PlayerProfile.current ?? await PlayerProfile.load();
+    String? localName = active?.name.trim();
+
+    if (localName == null || localName.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      localName = prefs.getString('player_name')?.trim();
+    }
+
+    if (localName != null && localName.isNotEmpty && mounted) {
       setState(() {
-        _playerName = name.trim().toUpperCase();
+        _playerName = localName!.toUpperCase();
+        if (active != null) {
+          if (active.learningGoal.isNotEmpty) {
+            _playerTitle = active.learningGoal;
+          }
+          _xp = active.xp;
+          _level = active.level;
+          _coins = active.coins;
+        }
       });
     }
+
+    try {
+      final targetUserId = (active != null && active.id.isNotEmpty)
+          ? active.id
+          : (localName != null && localName.isNotEmpty)
+              ? localName
+              : '';
+      final endpoint = targetUserId.isNotEmpty
+          ? '/api/profile/me?userId=$targetUserId'
+          : '/api/profile/me';
+
+      final res = await ApiService.get(endpoint);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final p = data['profile'] as Map<String, dynamic>?;
+        if (p != null && mounted) {
+          final serverName = (p['name'] as String?)?.trim();
+          setState(() {
+            if (serverName != null && serverName.isNotEmpty) {
+              _playerName = serverName.toUpperCase();
+            } else if (localName != null && localName.isNotEmpty) {
+              _playerName = localName.toUpperCase();
+            }
+            if ((p['learning_goal'] as String?)?.isNotEmpty == true) {
+              _playerTitle = p['learning_goal'] as String;
+            }
+            _xp = p['xp'] as int? ?? _xp;
+            _level = p['level'] as int? ?? _level;
+            _coins = p['coins'] as int? ?? _coins;
+          });
+
+          // Persist updated profile
+          final updated = (active ?? const PlayerProfile()).copyWith(
+            id: p['id'] as String?,
+            name: serverName ?? localName,
+            learningGoal: p['learning_goal'] as String?,
+            xp: _xp,
+            level: _level,
+            coins: _coins,
+          );
+          await updated.save();
+        }
+      }
+    } catch (_) {}
   }
 
   @override

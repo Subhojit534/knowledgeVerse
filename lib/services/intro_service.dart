@@ -7,7 +7,7 @@ import '../models/player_profile.dart';
 import 'api_config.dart';
 import 'api_service.dart';
 
-/// Narration returned by the backend, plus how to play it.
+/// Narration returned by the backend, plus how to play it and saved profile.
 class IntroResult {
   const IntroResult({
     required this.narration,
@@ -15,6 +15,7 @@ class IntroResult {
     required this.audioAvailable,
     required this.source,
     required this.cacheKey,
+    this.savedProfile,
   });
 
   final String narration;
@@ -25,13 +26,10 @@ class IntroResult {
   /// (backend unreachable — text composed on-device).
   final String source;
   final String cacheKey;
+  final PlayerProfile? savedProfile;
 }
 
 /// Fetches the cinematic intro from the backend.
-///
-/// The player must never be blocked by an AI failure, so every path here ends
-/// in usable narration: backend retries Gemini, falls back to its own text, and
-/// if the backend itself is unreachable we compose the text on-device.
 class IntroService {
   IntroService._();
 
@@ -66,8 +64,6 @@ class IntroService {
   static Future<IntroResult> _fetch(PlayerProfile profile, String key) async {
     final base = ApiConfig.baseUrl;
 
-    // Two attempts: the backend already retries Gemini internally, so this only
-    // covers transport-level hiccups.
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
         final response = await ApiService.post(
@@ -77,17 +73,21 @@ class IntroService {
         );
 
         if (response.statusCode == 200) {
-          // Force UTF-8: narration contains em dashes and curly quotes that
-          // http's default latin-1 guess would mangle.
           final data = jsonDecode(utf8.decode(response.bodyBytes))
               as Map<String, dynamic>;
           final path = data['audio_url'] as String?;
+          final profileData = data['profile'] as Map<String, dynamic>?;
+          final savedProfile = profileData != null
+              ? PlayerProfile.fromJson(profileData)
+              : null;
+
           return IntroResult(
             narration: data['narration'] as String? ?? '',
             audioUrl: path == null ? null : '$base$path',
             audioAvailable: data['audio_available'] as bool? ?? false,
             source: data['source'] as String? ?? 'gemini',
             cacheKey: data['cache_key'] as String? ?? key,
+            savedProfile: savedProfile,
           );
         }
         debugPrint('IntroService: backend returned ${response.statusCode}');
@@ -106,6 +106,7 @@ class IntroService {
       audioAvailable: false,
       source: 'offline',
       cacheKey: key,
+      savedProfile: profile,
     );
   }
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
+import '../services/intro_service.dart';
+import 'splash_screen.dart';
 import 'world_generation_screen.dart';
 
 const int _kStepCount = 4;
 
 /// "High Fidelity Onboarding Flow" matching exact Stitch screens:
-/// 1. "High Fidelity - Name Entry"
+/// 1. "High Fidelity - Name & Password Entry"
 /// 2. "High Fidelity - Class Selection"
 /// 3. "High Fidelity - District Selection"
 /// 4. "High Fidelity - Difficulty Selection"
@@ -20,10 +22,13 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentStep = 0;
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   final Set<int> _selectedDistrictIndices = {0};
   String _grade = 'Class 10';
   String _curriculum = 'CBSE';
   String _difficulty = 'Balanced';
+  bool _isSubmitting = false;
 
   static const List<String> _grades = [
     'Class 6',
@@ -94,8 +99,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   PlayerProfile _buildProfile() {
     final name = _nameController.text.trim();
+    final pwd = _passwordController.text.trim();
     return PlayerProfile(
       name: name.isEmpty ? 'Explorer' : name,
+      password: pwd.isEmpty ? 'password123' : pwd,
       grade: _grade,
       curriculum: _curriculum,
       subjects: _selectedDistrictIndices
@@ -108,31 +115,103 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  void _showSnackBar(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text, style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+        backgroundColor: const Color(0xFF990000),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _nextStep() async {
+    // Step 0 validation
+    if (_currentStep == 0) {
+      final name = _nameController.text.trim();
+      final pwd = _passwordController.text.trim();
+      final confirmPwd = _confirmPasswordController.text.trim();
+
+      if (name.isEmpty) {
+        _showSnackBar('Please enter your explorer name!');
+        return;
+      }
+      if (pwd.length < 4) {
+        _showSnackBar('Password must be at least 4 characters!');
+        return;
+      }
+      if (pwd != confirmPwd) {
+        _showSnackBar('Passwords do not match! Please check again.');
+        return;
+      }
+    }
+
     if (_currentStep < _kStepCount - 1) {
       FocusScope.of(context).unfocus();
       setState(() => _currentStep++);
       return;
     }
 
+    // Final Step Submission
+    setState(() => _isSubmitting = true);
     final profile = _buildProfile();
-    await profile.save();
-    if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => WorldGenerationScreen(profile: profile),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 600),
-      ),
-    );
+    try {
+      final intro = await IntroService.fetchIntro(profile);
+      final finalProfile = intro.savedProfile ?? profile;
+      await finalProfile.save();
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => WorldGenerationScreen(profile: finalProfile),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ [OnboardingScreen Error]: $e');
+      await profile.save();
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => WorldGenerationScreen(profile: profile),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _goBack() {
+    FocusScope.of(context).unfocus();
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const SplashScreen(),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -464,49 +543,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (_currentStep > 0)
-                GestureDetector(
-                  onTap: () {
-                    FocusScope.of(context).unfocus();
-                    setState(() => _currentStep--);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E1E32),
-                      border: Border.all(
-                          color: const Color(0xFFF2CA50), width: 1.5),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.arrow_back_rounded,
-                            color: Color(0xFFD0C5AF), size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'BACK',
-                          style: GoogleFonts.spaceMono(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: const Color(0xFFD0C5AF),
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
+              GestureDetector(
+                onTap: _goBack,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E32),
+                    border: Border.all(
+                        color: const Color(0xFFF2CA50), width: 1.5),
                   ),
-                )
-              else
-                const SizedBox.shrink(),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.arrow_back_rounded,
+                          color: Color(0xFFD0C5AF), size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'BACK',
+                        style: GoogleFonts.spaceMono(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: const Color(0xFFD0C5AF),
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
               // Glowing Emerald Continue Button
               GestureDetector(
-                onTap: _nextStep,
+                onTap: _isSubmitting ? null : _nextStep,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF065F46),
+                    color: _isSubmitting ? Colors.grey : const Color(0xFF065F46),
                     border:
                         Border.all(color: const Color(0xFFF2CA50), width: 2.5),
                     boxShadow: const [
@@ -521,9 +594,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _currentStep == _kStepCount - 1
-                            ? 'GENERATE MY WORLD 🚀'
-                            : 'CONTINUE',
+                        _isSubmitting
+                            ? 'CREATING...'
+                            : (_currentStep == _kStepCount - 1
+                                ? 'GENERATE MY WORLD 🚀'
+                                : 'CONTINUE'),
                         style: GoogleFonts.spaceMono(
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
@@ -564,68 +639,141 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  // ── SCREEN 1: "High Fidelity - Name Entry" ──────────────────────────────────
+  // ── SCREEN 1: "High Fidelity - Name Entry & Password" ─────────────────────
   Widget _buildStep1NameEntry() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title
-        Text(
-          'WHAT IS YOUR EXPLORER NAME?',
-          style: GoogleFonts.spaceMono(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            color: const Color(0xFFF2CA50),
-            letterSpacing: 1.5,
-            shadows: const [
-              Shadow(color: Color(0xFF3C2F00), offset: Offset(2, 2)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Enter the moniker by which your civilization shall record your deeds.',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 11,
-            color: const Color(0xFFD0C5AF),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Ornate Parchment/Stone Input Box (stone-input)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2E0FC),
-            border: Border.all(color: const Color(0xFF99907C), width: 3),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0xFF4D4635),
-                offset: Offset(3, 3),
-              ),
-            ],
-          ),
-          child: TextField(
-            controller: _nameController,
-            onChanged: (_) => setState(() {}),
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title
+          Text(
+            'WHAT IS YOUR EXPLORER NAME?',
             style: GoogleFonts.spaceMono(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF1A1A2E),
-            ),
-            decoration: InputDecoration(
-              icon: const Icon(Icons.edit_rounded,
-                  color: Color(0xFF3C2F00), size: 22),
-              hintText: 'Type your name...',
-              hintStyle: GoogleFonts.spaceMono(
-                fontSize: 14,
-                color: const Color(0xFF6B5A3E),
-              ),
-              border: InputBorder.none,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: const Color(0xFFF2CA50),
+              letterSpacing: 1.2,
+              shadows: const [
+                Shadow(color: Color(0xFF3C2F00), offset: Offset(2, 2)),
+              ],
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            'Create your unique account credentials to save your progress.',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              color: const Color(0xFFD0C5AF),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Explorer Name Input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E0FC),
+              border: Border.all(color: const Color(0xFF99907C), width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0xFF4D4635),
+                  offset: Offset(2, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _nameController,
+              onChanged: (_) => setState(() {}),
+              style: GoogleFonts.spaceMono(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A2E),
+              ),
+              decoration: InputDecoration(
+                icon: const Icon(Icons.person_rounded,
+                    color: Color(0xFF3C2F00), size: 18),
+                hintText: 'Unique Explorer Name...',
+                hintStyle: GoogleFonts.spaceMono(
+                  fontSize: 12,
+                  color: const Color(0xFF6B5A3E),
+                ),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Password Input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E0FC),
+              border: Border.all(color: const Color(0xFF99907C), width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0xFF4D4635),
+                  offset: Offset(2, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _passwordController,
+              obscureText: true,
+              style: GoogleFonts.spaceMono(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A2E),
+              ),
+              decoration: InputDecoration(
+                icon: const Icon(Icons.lock_rounded,
+                    color: Color(0xFF3C2F00), size: 18),
+                hintText: 'Password (min 4 chars)...',
+                hintStyle: GoogleFonts.spaceMono(
+                  fontSize: 12,
+                  color: const Color(0xFF6B5A3E),
+                ),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Confirm Password Input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E0FC),
+              border: Border.all(color: const Color(0xFF99907C), width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0xFF4D4635),
+                  offset: Offset(2, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _confirmPasswordController,
+              obscureText: true,
+              style: GoogleFonts.spaceMono(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A2E),
+              ),
+              decoration: InputDecoration(
+                icon: const Icon(Icons.lock_clock_rounded,
+                    color: Color(0xFF3C2F00), size: 18),
+                hintText: 'Confirm Password...',
+                hintStyle: GoogleFonts.spaceMono(
+                  fontSize: 12,
+                  color: const Color(0xFF6B5A3E),
+                ),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

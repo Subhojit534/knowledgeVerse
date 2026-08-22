@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import '../../../config/asset_paths.dart';
 import '../../../../screens/profile_screen.dart';
 
+import '../../../models/player_profile.dart';
+
 /// Reference-style player portrait card widget — top-left corner.
-/// Shows avatar, player name "Arcanist", level badge, and XP progress bar.
+/// Shows avatar, player name, level badge, and XP progress bar.
 /// Clicking anywhere on the portrait card navigates directly to ProfileScreen.
 class PortraitCardWidget extends StatelessWidget {
   final String playerName;
   final int level;
   final int currentXp;
   final int maxXp;
+  final PlayerProfile? profile;
 
   const PortraitCardWidget({
     super.key,
@@ -17,6 +20,7 @@ class PortraitCardWidget extends StatelessWidget {
     this.level = 12,
     this.currentXp = 850,
     this.maxXp = 1500,
+    this.profile,
   });
 
   @override
@@ -27,7 +31,7 @@ class PortraitCardWidget extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+          MaterialPageRoute(builder: (_) => ProfileScreen(profile: profile)),
         );
       },
       child: Container(

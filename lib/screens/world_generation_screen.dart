@@ -271,10 +271,11 @@ class _WorldGenerationScreenState extends State<WorldGenerationScreen>
     _player.stop();
     // The castle screens own the score; the rest of the app runs quiet.
     ThemeMusicService.instance.fadeOutAndStop();
+    widget.profile.save();
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const WorldArchipelagoScreen(),
+        pageBuilder: (_, __, ___) => WorldArchipelagoScreen(profile: widget.profile),
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 800),

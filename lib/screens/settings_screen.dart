@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/theme_music_service.dart';
 import 'home_screen.dart';
+import 'login_screen.dart';
 
 /// 16-Bit RPG System Options Screen.
 /// Features chiseled obsidian option tablets, retro pixel toggles,
@@ -254,6 +256,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           style: GoogleFonts.pressStart2p(
                                             fontSize: 9,
                                             color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final prefs = await SharedPreferences.getInstance();
+                                      await prefs.clear();
+                                      if (!context.mounted) return;
+                                      Navigator.pushAndRemoveUntil(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                        (route) => false,
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E1E32),
+                                        border: Border.all(color: const Color(0xFFF2CA50), width: 2),
+                                        boxShadow: const [
+                                          BoxShadow(color: Colors.black, offset: Offset(2, 2)),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          'LOGOUT EXPLORER 🚪',
+                                          style: GoogleFonts.pressStart2p(
+                                            fontSize: 9,
+                                            color: const Color(0xFFF2CA50),
                                           ),
                                         ),
                                       ),

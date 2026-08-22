@@ -12,6 +12,8 @@ import 'portrait_card.dart';
 import 'settings_button.dart';
 import 'side_buttons.dart';
 
+import '../../../models/player_profile.dart';
+
 /// Full HUD overlay matching the reference image layout:
 /// - Top-left: Portrait card + currency stack
 /// - Top-right: Movement toggle + Settings button (standardized 64x72 cards)
@@ -20,13 +22,33 @@ import 'side_buttons.dart';
 /// - Bottom-right: Bottom navbar (Map, Social, Leaderboard, Shop as 64x72 cards)
 /// - Center-top (conditional): Notification banner
 /// - Center (conditional): Building action panel
-class GameHudWidget extends StatelessWidget {
+class GameHudWidget extends StatefulWidget {
   final String? notificationMessage;
 
   const GameHudWidget({
     super.key,
     this.notificationMessage,
   });
+
+  @override
+  State<GameHudWidget> createState() => _GameHudWidgetState();
+}
+
+class _GameHudWidgetState extends State<GameHudWidget> {
+  PlayerProfile? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final p = PlayerProfile.current ?? await PlayerProfile.load();
+    if (p != null && mounted) {
+      setState(() => _profile = p);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +61,17 @@ class GameHudWidget extends StatelessWidget {
       builder: (context, child) {
         final activeBuilding = buildingManager.activePanelBuilding;
         final String? currentNotification =
-            notificationMessage ?? fsm.activeNotification;
+            widget.notificationMessage ?? fsm.activeNotification;
+
+        final displayName = (_profile?.name.isNotEmpty == true)
+            ? _profile!.name
+            : 'Arcanist';
+        final displayLevel = _profile?.level ?? 1;
+        final displayXp = _profile?.xp ?? 150;
+        final displayMaxXp = (displayLevel * 100);
+        final displayCoins = _profile?.coins ?? 500;
+        final displayGems = _profile?.gems ?? 25;
+        final displayEnergy = _profile?.energy ?? 100;
 
         return Stack(
           fit: StackFit.expand,
@@ -53,17 +85,18 @@ class GameHudWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     PortraitCardWidget(
-                      playerName: 'Arcanist',
-                      level: 12,
-                      currentXp: 850,
-                      maxXp: 1500,
+                      playerName: displayName,
+                      level: displayLevel,
+                      currentXp: displayXp,
+                      maxXp: displayMaxXp,
+                      profile: _profile,
                     ),
                     const SizedBox(height: 10),
                     CurrencyRowWidget(
-                      coins: 2450,
-                      gems: 340,
-                      energy: 120,
-                      maxEnergy: 120,
+                      coins: displayCoins,
+                      gems: displayGems,
+                      energy: displayEnergy,
+                      maxEnergy: 100,
                     ),
                   ],
                 ),
