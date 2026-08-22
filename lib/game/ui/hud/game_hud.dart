@@ -57,21 +57,20 @@ class _GameHudWidgetState extends State<GameHudWidget> {
     final fsm = GameStateManager();
 
     return AnimatedBuilder(
-      animation: Listenable.merge([gameState, buildingManager, fsm]),
+      animation: Listenable.merge([gameState, buildingManager, fsm, PlayerProfile.notifier]),
       builder: (context, child) {
         final activeBuilding = buildingManager.activePanelBuilding;
         final String? currentNotification =
             widget.notificationMessage ?? fsm.activeNotification;
 
-        final displayName = (_profile?.name.isNotEmpty == true)
-            ? _profile!.name
-            : 'Arcanist';
-        final displayLevel = _profile?.level ?? 1;
-        final displayXp = _profile?.xp ?? 150;
-        final displayMaxXp = (displayLevel * 100);
-        final displayCoins = _profile?.coins ?? 500;
-        final displayGems = _profile?.gems ?? 25;
-        final displayEnergy = _profile?.energy ?? 100;
+        final profile = PlayerProfile.notifier.value ?? PlayerProfile.current ?? _profile ?? const PlayerProfile();
+        final displayName = profile.name.isNotEmpty ? profile.name : 'Arcanist';
+        final displayLevel = profile.level;
+        final displayCurrentLvlXp = profile.currentLevelXp;
+        final displayMaxLvlXp = profile.nextLevelXpRequired;
+        final displayCoins = profile.coins;
+        final displayGems = profile.gems;
+        final displayEnergy = profile.energy;
 
         return Stack(
           fit: StackFit.expand,
@@ -87,9 +86,9 @@ class _GameHudWidgetState extends State<GameHudWidget> {
                     PortraitCardWidget(
                       playerName: displayName,
                       level: displayLevel,
-                      currentXp: displayXp,
-                      maxXp: displayMaxXp,
-                      profile: _profile,
+                      currentXp: displayCurrentLvlXp,
+                      maxXp: displayMaxLvlXp,
+                      profile: profile,
                     ),
                     const SizedBox(height: 10),
                     CurrencyRowWidget(

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../config/asset_paths.dart';
 import '../../../../screens/profile_screen.dart';
-
 import '../../../models/player_profile.dart';
 
-/// Reference-style player portrait card widget — top-left corner.
-/// Shows avatar, player name, level badge, and XP progress bar.
-/// Clicking anywhere on the portrait card navigates directly to ProfileScreen.
+/// Player portrait card widget — top-left corner of the main game screen.
+/// Shows avatar, level badge, and XP progress bar (without player name text as requested).
+/// Clicking anywhere on the card navigates directly to ProfileScreen.
 class PortraitCardWidget extends StatelessWidget {
   final String playerName;
   final int level;
@@ -16,16 +15,16 @@ class PortraitCardWidget extends StatelessWidget {
 
   const PortraitCardWidget({
     super.key,
-    this.playerName = 'Arcanist',
-    this.level = 12,
-    this.currentXp = 850,
-    this.maxXp = 1500,
+    this.playerName = '',
+    this.level = 1,
+    this.currentXp = 150,
+    this.maxXp = 200,
     this.profile,
   });
 
   @override
   Widget build(BuildContext context) {
-    final double xpRatio = (currentXp / maxXp).clamp(0.0, 1.0);
+    final double xpRatio = maxXp > 0 ? (currentXp / maxXp).clamp(0.0, 1.0) : 0.5;
 
     return GestureDetector(
       onTap: () {
@@ -35,29 +34,29 @@ class PortraitCardWidget extends StatelessWidget {
         );
       },
       child: Container(
-        width: 210,
-        padding: const EdgeInsets.all(10),
+        width: 175,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xE0122040),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF6B5A3E), width: 2),
+          border: Border.all(color: const Color(0xFFF2CA50), width: 2),
           boxShadow: const [
             BoxShadow(
               color: Colors.black54,
-              blurRadius: 10,
+              blurRadius: 8,
               offset: Offset(0, 4),
             ),
           ],
         ),
         child: Row(
           children: [
-            // Avatar portrait
+            // Avatar portrait with gold border
             Container(
-              width: 52,
-              height: 52,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF6B5A3E), width: 2.5),
+                border: Border.all(color: const Color(0xFFF2CA50), width: 2),
                 color: const Color(0xFF0D1B2A),
                 image: const DecorationImage(
                   image: AssetImage(
@@ -68,36 +67,37 @@ class PortraitCardWidget extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            // Name, level, XP
+
+            // Level & XP Bar (No Player Name Text)
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    playerName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      letterSpacing: 0.3,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E32),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFF2CA50), width: 1),
                     ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    'Level $level',
-                    style: const TextStyle(
-                      color: Color(0xFFCDD6F4),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                    child: Text(
+                      'LVL $level',
+                      style: const TextStyle(
+                        color: Color(0xFFF2CA50),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 5),
+
                   // XP Bar
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      height: 7,
+                      height: 6,
                       width: double.infinity,
                       color: const Color(0xFF1A1A2E),
                       child: FractionallySizedBox(
@@ -118,25 +118,12 @@ class PortraitCardWidget extends StatelessWidget {
                     '$currentXp / $maxXp XP',
                     style: const TextStyle(
                       color: Color(0xFFCBA6F7),
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
-            ),
-            // Shield/emblem on right
-            const SizedBox(width: 6),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF1A1A2E),
-                border: Border.all(color: const Color(0xFF6B5A3E), width: 1.5),
-              ),
-              child:
-                  const Icon(Icons.shield, color: Color(0xFFF9E2AF), size: 20),
             ),
           ],
         ),

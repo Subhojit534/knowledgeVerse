@@ -6,6 +6,8 @@ class LearningRequest {
   final String difficulty;
   final int studentLevel;
   final String? topic;
+  final String? grade;
+  final String? curriculum;
 
   const LearningRequest({
     required this.buildingId,
@@ -14,6 +16,8 @@ class LearningRequest {
     this.difficulty = 'Intermediate',
     this.studentLevel = 1,
     this.topic,
+    this.grade,
+    this.curriculum,
   });
 
   Map<String, dynamic> toJson() => {
@@ -23,6 +27,8 @@ class LearningRequest {
         'difficulty': difficulty,
         'student_level': studentLevel,
         if (topic != null && topic!.isNotEmpty) 'topic': topic,
+        if (grade != null && grade!.isNotEmpty) 'grade': grade,
+        if (curriculum != null && curriculum!.isNotEmpty) 'curriculum': curriculum,
       };
 }
 
@@ -44,19 +50,47 @@ class MCQuestion {
 
   factory MCQuestion.fromJson(Map<String, dynamic> json) {
     final List<dynamic> rawOpts = json['options'] as List<dynamic>? ?? [];
-    final opts = rawOpts.map((e) => e.toString()).toList();
+    final opts = rawOpts.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
     
     // Ensure 4 options
     while (opts.length < 4) {
       opts.add('Option ${opts.length + 1}');
     }
 
+    int parsedCorrectIndex = 0;
+    final rawCorrect = json['correct_index'] ?? json['correctIndex'];
+    if (rawCorrect is num) {
+      parsedCorrectIndex = rawCorrect.toInt();
+    } else if (rawCorrect is String) {
+      final upper = rawCorrect.trim().toUpperCase();
+      if (upper == 'A') {
+        parsedCorrectIndex = 0;
+      } else if (upper == 'B') {
+        parsedCorrectIndex = 1;
+      } else if (upper == 'C') {
+        parsedCorrectIndex = 2;
+      } else if (upper == 'D') {
+        parsedCorrectIndex = 3;
+      } else {
+        parsedCorrectIndex = int.tryParse(upper) ?? 0;
+      }
+    }
+
+    // If correct_answer_text was supplied in JSON, verify exact match
+    final rawAnswerText = json['correct_answer_text']?.toString().trim();
+    if (rawAnswerText != null && rawAnswerText.isNotEmpty) {
+      final matchIdx = opts.indexWhere((opt) => opt.toLowerCase() == rawAnswerText.toLowerCase());
+      if (matchIdx >= 0) {
+        parsedCorrectIndex = matchIdx;
+      }
+    }
+
     return MCQuestion(
-      id: json['id'] as int? ?? 1,
-      question: json['question'] as String? ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 1,
+      question: json['question']?.toString() ?? '',
       options: opts.sublist(0, 4),
-      correctIndex: (json['correct_index'] as int? ?? 0).clamp(0, 3),
-      explanation: json['explanation'] as String? ?? 'Correct principle.',
+      correctIndex: parsedCorrectIndex.clamp(0, 3),
+      explanation: json['explanation']?.toString() ?? 'Correct principle applied.',
     );
   }
 }

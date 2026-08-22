@@ -1,37 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-class ShopItemModel {
-  final String id;
-  final String name;
-  final String category;
-  final String rarity;
-  final Color rarityColor;
-  final String imagePath;
-  final String description;
-  final String perkText;
-  final int price;
-  final String currency; // 'COINS' or 'GEMS'
-  final String tagText;
-
-  const ShopItemModel({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.rarity,
-    required this.rarityColor,
-    required this.imagePath,
-    required this.description,
-    required this.perkText,
-    required this.price,
-    required this.currency,
-    this.tagText = '',
-  });
-}
+import '../models/player_profile.dart';
+import '../services/api_service.dart';
+import '../services/inventory_catalog.dart';
 
 /// Authentic 16-Bit Arcane Shop & Bazaar Screen.
-/// Features chiseled obsidian cards, double-gold pixel borders (#F2CA50),
-/// zero-blur pixel shadows, Press Start 2P typography, and reference item grid layout.
+/// Connected with live player coins, gems, and persistent inventory storage.
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
 
@@ -42,122 +16,44 @@ class ShopScreen extends StatefulWidget {
 class _ShopScreenState extends State<ShopScreen> {
   int _activeNavIndex = 0; // 0: Featured, 1: Gear, 2: Boosts, 3: Vault
 
-  int _playerCoins = 2450;
-  int _playerGems = 340;
+  PlayerProfile? _profile;
+  int _playerCoins = 500;
+  int _playerGems = 25;
+  List<String> _ownedItems = [];
 
-  static const List<ShopItemModel> _featuredItems = [
-    ShopItemModel(
-      id: 'f_robe',
-      name: 'Void-Walker Mantle',
-      category: 'LEGENDARY ROBE',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_robe.jpg',
-      description:
-          'Woven from the silk of abyss spiders. Grants temporary invisibility in shadowed corridors and +30% Focus XP.',
-      perkText: '+30% XP & SHADOW CLOAK',
-      price: 250,
-      currency: 'GEMS',
-      tagText: 'HOT DEAL',
-    ),
-    ShopItemModel(
-      id: 'f_wand',
-      name: 'Arcane Code Wand',
-      category: 'WEAPON SKIN',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_wand.jpg',
-      description:
-          'Forged in coding towers to cast swift logic algorithms. Emits cyan sparks during quiz trials.',
-      perkText: '+15% SPEED ANSWER BONUS',
-      price: 350,
-      currency: 'GEMS',
-      tagText: 'BESTSELLER',
-    ),
-    ShopItemModel(
-      id: 'f_shield',
-      name: 'Dragon Boss Shield',
-      category: 'LEGENDARY RELIC',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_shield.jpg',
-      description:
-          'Protects your daily streak even if a lesson quest is missed due to real-life duties.',
-      perkText: 'STREAK SHIELD PROTECTION',
-      price: 180,
-      currency: 'GEMS',
-    ),
-    ShopItemModel(
-      id: 'f_scroll',
-      name: 'Ancient Lore Scroll',
-      category: 'LORE ARTIFACT',
-      rarity: 'EPIC',
-      rarityColor: Color(0xFFDEB7FF),
-      imagePath: 'assets/images/pixel_scroll.jpg',
-      description:
-          'Contains forgotten history lore of ancient civilizations. Unlocks extra History Tower trials.',
-      perkText: '+25 HISTORY LORE XP',
-      price: 800,
-      currency: 'COINS',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
-  static const List<ShopItemModel> _gearItems = [
-    ShopItemModel(
-      id: 'g_robe',
-      name: 'Void-Walker Mantle',
-      category: 'ROBE',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_robe.jpg',
-      description:
-          'Woven from the silk of abyss spiders. Grants temporary invisibility in shadowed corridors.',
-      perkText: '+30% FOCUS XP',
-      price: 250,
-      currency: 'GEMS',
-    ),
-    ShopItemModel(
-      id: 'g_wand',
-      name: 'Arcane Code Wand',
-      category: 'WEAPON',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_wand.jpg',
-      description: 'Casts glowing cyan particles whenever you submit quiz answers.',
-      perkText: '+10% SPEED ANSWER BONUS',
-      price: 350,
-      currency: 'GEMS',
-    ),
-  ];
+  Future<void> _loadProfile() async {
+    final p = PlayerProfile.current ?? await PlayerProfile.load();
+    if (p != null && mounted) {
+      setState(() {
+        _profile = p;
+        _playerCoins = p.coins;
+        _playerGems = p.gems;
+        _ownedItems = List<String>.from(p.ownedItems);
+      });
+    }
+  }
 
-  static const List<ShopItemModel> _boostItems = [
-    ShopItemModel(
-      id: 'b_potion',
-      name: 'Alchemy Health Potion',
-      category: 'CONSUMABLE',
-      rarity: 'COMMON',
-      rarityColor: Color(0xFF82C0A0),
-      imagePath: 'assets/images/pixel_potion.jpg',
-      description: 'Instantly restores 50 Explorer Energy points to continue world quests.',
-      perkText: '+50 EXPLORER ENERGY',
-      price: 200,
-      currency: 'COINS',
-    ),
-    ShopItemModel(
-      id: 'b_gem',
-      name: 'Math Sorcerer Gem',
-      category: 'CATALYST',
-      rarity: 'LEGENDARY',
-      rarityColor: Color(0xFFF2CA50),
-      imagePath: 'assets/images/pixel_gem.jpg',
-      description: 'Amplifies numerical calculations during boss quiz challenges.',
-      perkText: '+25% MATH SPEED',
-      price: 150,
-      currency: 'GEMS',
-    ),
-  ];
+  void _handlePurchase(GameItem item) async {
+    if (_ownedItems.contains(item.id) && item.category != 'CONSUMABLE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'YOU ALREADY OWN ${item.name.toUpperCase()}!',
+            style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50)),
+          ),
+          backgroundColor: const Color(0xFF1E1E32),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
-  void _handlePurchase(ShopItemModel item) {
     final bool canAfford = item.currency == 'COINS'
         ? _playerCoins >= item.price
         : _playerGems >= item.price;
@@ -176,30 +72,53 @@ class _ShopScreenState extends State<ShopScreen> {
       return;
     }
 
-    setState(() {
-      if (item.currency == 'COINS') {
-        _playerCoins -= item.price;
-      } else {
-        _playerGems -= item.price;
-      }
+    final currentProfile = _profile ?? PlayerProfile.current ?? const PlayerProfile();
+    final updatedProfile = currentProfile.withPurchasedItem(
+      itemId: item.id,
+      price: item.price,
+      currency: item.currency,
+    );
+
+    await updatedProfile.save();
+
+    // Async notify backend DB
+    Future(() async {
+      try {
+        final targetUserId = updatedProfile.id.isNotEmpty ? updatedProfile.id : updatedProfile.name;
+        await ApiService.post('/api/shop/purchase', body: {
+          'userId': targetUserId,
+          'shopItemId': item.id,
+        });
+      } catch (_) {}
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF82C0A0)),
-            const SizedBox(width: 8),
-            Text(
-              'SUCCESSFULLY PURCHASED ${item.name.toUpperCase()}!',
-              style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
-            ),
-          ],
+    if (mounted) {
+      setState(() {
+        _profile = updatedProfile;
+        _playerCoins = updatedProfile.coins;
+        _playerGems = updatedProfile.gems;
+        _ownedItems = List<String>.from(updatedProfile.ownedItems);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF82C0A0)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ACQUIRED ${item.name.toUpperCase()}! ITEM ADDED TO INVENTORY.',
+                  style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF065F46),
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor: const Color(0xFF1E1E32),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -292,7 +211,7 @@ class _ShopScreenState extends State<ShopScreen> {
             ),
           ),
 
-          // Currency Counters
+          // Live Currency Counters
           Row(
             children: [
               _buildCurrencyBadge('$_playerCoins', '🪙', const Color(0xFFF2CA50)),
@@ -349,39 +268,26 @@ class _ShopScreenState extends State<ShopScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF28283D) : const Color(0xFF1B1B2C),
+                color: isSelected ? const Color(0xFF28283D) : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF3C382A),
-                  width: 2,
+                  color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF333348),
+                  width: 1.5,
                 ),
-                boxShadow: isSelected
-                    ? const [
-                        BoxShadow(
-                            color: Colors.black,
-                            offset: Offset(2, 2),
-                            blurRadius: 0),
-                      ]
-                    : null,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     item['icon'] as IconData,
-                    color: isSelected
-                        ? const Color(0xFFF2CA50)
-                        : const Color(0xFF8C867A),
+                    color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
                     size: 20,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     item['label'] as String,
-                    textAlign: TextAlign.center,
                     style: GoogleFonts.pressStart2p(
-                      fontSize: 7.5,
-                      color: isSelected
-                          ? const Color(0xFFF2CA50)
-                          : const Color(0xFF8C867A),
+                      fontSize: 6.5,
+                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
                     ),
                   ),
                 ],
@@ -393,13 +299,18 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  // ─── 2. MAIN SHOP GRID (REFERENCE IMAGE MATCH) ──────────────────────────────
+  // ─── 2. SHOP GRID VIEWPORT ──────────────────────────────────────────────────
   Widget _buildShopGridArea() {
-    final items = _activeNavIndex == 0
-        ? _featuredItems
-        : _activeNavIndex == 1
-            ? _gearItems
-            : _boostItems;
+    List<GameItem> items;
+    if (_activeNavIndex == 0) {
+      items = InventoryCatalog.getFeaturedItems();
+    } else if (_activeNavIndex == 1) {
+      items = InventoryCatalog.getGearItems();
+    } else if (_activeNavIndex == 2) {
+      items = InventoryCatalog.getBoostItems();
+    } else {
+      items = InventoryCatalog.getVaultItems();
+    }
 
     return Container(
       color: const Color(0xFF0F0F1A),
@@ -423,13 +334,18 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  /// Single Shop Item Card matching the reference image layout in 16-bit RPG theme!
-  Widget _buildReferenceShopCard(ShopItemModel item) {
+  /// Single Shop Item Card matching 16-bit RPG theme
+  Widget _buildReferenceShopCard(GameItem item) {
+    final bool isOwned = _ownedItems.contains(item.id) && item.category != 'CONSUMABLE';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E32),
-        border: Border.all(color: const Color(0xFFF2CA50), width: 2),
+        border: Border.all(
+          color: isOwned ? const Color(0xFF82C0A0) : const Color(0xFFF2CA50),
+          width: 2,
+        ),
         boxShadow: const [
           BoxShadow(
             color: Colors.black,
@@ -459,8 +375,8 @@ class _ShopScreenState extends State<ShopScreen> {
                       item.imagePath,
                       fit: BoxFit.contain,
                       errorBuilder: (ctx, err, stack) => Icon(
-                        Icons.workspace_premium_rounded,
-                        size: 56,
+                        item.icon,
+                        size: 48,
                         color: item.rarityColor,
                       ),
                     ),
@@ -487,6 +403,24 @@ class _ShopScreenState extends State<ShopScreen> {
                         ),
                       ),
                     ),
+
+                  // Owned indicator badge
+                  if (isOwned)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF065F46),
+                          border: Border.all(color: const Color(0xFF82C0A0)),
+                        ),
+                        child: Text(
+                          'OWNED',
+                          style: GoogleFonts.pressStart2p(fontSize: 6, color: Colors.white),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -504,7 +438,7 @@ class _ShopScreenState extends State<ShopScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.pressStart2p(
                     fontSize: 8.5,
-                    color: const Color(0xFFF2CA50),
+                    color: isOwned ? const Color(0xFF82C0A0) : const Color(0xFFF2CA50),
                   ),
                 ),
               ),
@@ -552,15 +486,18 @@ class _ShopScreenState extends State<ShopScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Golden Pixel Purchase Button
+          // Purchase / Owned Action Button
           InkWell(
-            onTap: () => _handlePurchase(item),
+            onTap: isOwned ? null : () => _handlePurchase(item),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF2CA50),
-                border: Border.all(color: Colors.white, width: 2),
+                color: isOwned ? const Color(0xFF28283D) : const Color(0xFFF2CA50),
+                border: Border.all(
+                  color: isOwned ? const Color(0xFF82C0A0) : Colors.white,
+                  width: 2,
+                ),
                 boxShadow: const [
                   BoxShadow(
                     color: Colors.black,
@@ -572,17 +509,17 @@ class _ShopScreenState extends State<ShopScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.shopping_cart_rounded,
-                    color: Colors.black,
+                  Icon(
+                    isOwned ? Icons.check_circle_rounded : Icons.shopping_cart_rounded,
+                    color: isOwned ? const Color(0xFF82C0A0) : Colors.black,
                     size: 16,
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'PURCHASE',
+                    isOwned ? 'OWNED' : 'PURCHASE',
                     style: GoogleFonts.pressStart2p(
                       fontSize: 9,
-                      color: Colors.black,
+                      color: isOwned ? const Color(0xFF82C0A0) : Colors.black,
                     ),
                   ),
                 ],

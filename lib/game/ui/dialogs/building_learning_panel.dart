@@ -1,18 +1,18 @@
 import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../models/learning_models.dart';
-import '../../../services/audio_narration_player.dart';
+import '../../../models/player_profile.dart';
 import '../../../services/learning_service.dart';
+import '../../../services/mobile_tts_service.dart';
 import '../../buildings/building_data.dart';
 import '../../managers/building_manager.dart';
 
 /// AI-Powered Building Learning Panel UI widget — PIXEL ART THEMED.
-/// Interacts with Gemini AI for generated topic explanations & 4 MCQs,
-/// and ElevenLabs for voice narration (explanation, tutorial, question reading).
+/// Uses Mobile TTS with calibrated fantasy voice (pitch 0.9, rate 0.45)
+/// for instant offline voice narration (explanation, tutorial, question reading).
 class BuildingLearningPanel extends StatefulWidget {
   final BuildingData building;
   final VoidCallback onClose;
@@ -30,7 +30,6 @@ class BuildingLearningPanel extends StatefulWidget {
 class _BuildingLearningPanelState extends State<BuildingLearningPanel>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late final AudioNarrationPlayer _narrationPlayer;
 
   bool _isLoading = true;
   LearningContentResponse? _content;
@@ -38,9 +37,9 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
 
   // Audio Playback State
   bool _isPlayingAudio = false;
-  bool _isLoadingAudio = false;
-  Duration _audioDuration = Duration.zero;
-  Duration _audioPosition = Duration.zero;
+  final bool _isLoadingAudio = false;
+  final Duration _audioDuration = Duration.zero;
+  final Duration _audioPosition = Duration.zero;
 
   // Quiz State
   int _currentQuestionIndex = 0;
@@ -70,18 +69,19 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _narrationPlayer = AudioNarrationPlayer(
-      onStateChanged: (s) {
-        if (mounted) setState(() => _isPlayingAudio = s == PlayerState.playing);
-      },
-      onPositionChanged: (p) {
-        if (mounted) setState(() => _audioPosition = p);
-      },
-      onDurationChanged: (d) {
-        if (mounted) setState(() => _audioDuration = d);
-      },
-    );
+    _tabController.addListener(_handleTabChange);
+    MobileTtsService.instance.addListener(_onTtsStateChanged);
     _fetchContent();
+  }
+
+  void _onTtsStateChanged(bool isSpeaking) {
+    if (mounted) {
+      setState(() => _isPlayingAudio = isSpeaking);
+    }
+  }
+
+  void _handleTabChange() {
+    MobileTtsService.instance.stop();
   }
 
   Future<void> _fetchContent() async {
@@ -91,11 +91,15 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
     });
 
     try {
+      final profile = PlayerProfile.notifier.value ?? PlayerProfile.current ?? const PlayerProfile();
       final req = LearningRequest(
         buildingId: widget.building.id,
         buildingName: widget.building.name,
         subject: widget.building.subject,
         studentLevel: widget.building.level,
+        grade: profile.grade.isNotEmpty ? profile.grade : 'Class 10',
+        curriculum: profile.curriculum.isNotEmpty ? profile.curriculum : 'CBSE',
+        topic: widget.building.name,
       );
 
       final response = await LearningService.fetchLearningContent(req);
@@ -118,85 +122,36 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
 
   @override
   void dispose() {
-    _narrationPlayer.dispose();
+    MobileTtsService.instance.removeListener(_onTtsStateChanged);
+    MobileTtsService.instance.stop();
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _playAudioUrl(String url, {String? cacheKey}) async {
-    try {
-      setState(() => _isLoadingAudio = true);
-      final success = await _narrationPlayer.playUrl(url, cacheKey: cacheKey);
-      setState(() => _isLoadingAudio = false);
-      if (!success) {
-        _showToast("Unable to play voice narration.");
-      }
-    } catch (e) {
-      debugPrint('Audio playback error: $e');
-      if (mounted) setState(() => _isLoadingAudio = false);
-    }
-  }
-
   Future<void> _togglePlayExplanationAudio() async {
+    if (_content == null || _content!.explanation.isEmpty) return;
     if (_isPlayingAudio) {
-      await _narrationPlayer.pause();
-    } else if (_audioPosition > Duration.zero && _audioPosition < _audioDuration) {
-      await _narrationPlayer.resume();
+      await MobileTtsService.instance.stop();
     } else {
-      final url = _content?.explanationAudioUrl;
-      final key = _content?.cacheKey;
-      if (url != null && url.isNotEmpty) {
-        await _playAudioUrl(url, cacheKey: key);
-      } else if (_content != null && _content!.explanation.isNotEmpty) {
-        setState(() => _isLoadingAudio = true);
-        final generatedUrl = await LearningService.fetchTTSAudioUrl(_content!.explanation);
-        setState(() => _isLoadingAudio = false);
-        if (generatedUrl != null) {
-          await _playAudioUrl(generatedUrl);
-        } else {
-          _showToast("Voice narration unavailable for this section.");
-        }
-      }
+      await MobileTtsService.instance.speak(_content!.explanation);
     }
   }
 
   Future<void> _playQuestionAudio(String text) async {
-    setState(() => _isLoadingAudio = true);
-    final url = await LearningService.fetchTTSAudioUrl(text);
-    setState(() => _isLoadingAudio = false);
-
-    if (url != null) {
-      await _playAudioUrl(url);
+    if (_isPlayingAudio && MobileTtsService.instance.currentText == text) {
+      await MobileTtsService.instance.stop();
     } else {
-      _showToast("Voice reading unavailable.");
+      await MobileTtsService.instance.speak(text);
     }
   }
 
   Future<void> _playTutorialAudio() async {
-    setState(() => _isLoadingAudio = true);
-    final url = await LearningService.fetchTTSAudioUrl(_tutorialText);
-    setState(() => _isLoadingAudio = false);
-
-    if (url != null) {
-      await _playAudioUrl(url);
+    if (_isPlayingAudio) {
+      await MobileTtsService.instance.stop();
     } else {
-      _showToast("Tutorial voice unavailable.");
+      await MobileTtsService.instance.speak(_tutorialText);
     }
-  }
-
-  void _showToast(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.pressStart2p(fontSize: 9, color: Colors.white),
-        ),
-        backgroundColor: _bgPanel,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _selectAnswer(int optionIndex) {
@@ -206,7 +161,7 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
     });
   }
 
-  void _submitAnswer() {
+  void _submitAnswer() async {
     if (_selectedOptionIndex == null || _content == null) return;
     final currentQ = _content!.questions[_currentQuestionIndex];
     final isCorrect = _selectedOptionIndex == currentQ.correctIndex;
@@ -218,9 +173,20 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
         _score += 1;
       }
     });
+
+    final currentProfile = PlayerProfile.current ?? await PlayerProfile.load();
+    if (currentProfile != null) {
+      if (isCorrect) {
+        final updated = currentProfile.withCorrectAnswer();
+        await updated.save();
+      } else {
+        final updated = currentProfile.withWrongAnswer();
+        await updated.save();
+      }
+    }
   }
 
-  void _nextQuestion() {
+  void _nextQuestion() async {
     if (_content == null) return;
     if (_currentQuestionIndex < _content!.questions.length - 1) {
       setState(() {
@@ -231,9 +197,29 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
     } else {
       final int xpAward = _score * 50 + 50;
       BuildingManager().addXp(widget.building.id, xpAward);
+
+      // If user got all questions right (4/4), award diamonds!
+      if (_score == _content!.questions.length) {
+        final currentProfile = PlayerProfile.current ?? await PlayerProfile.load();
+        if (currentProfile != null) {
+          final updated = currentProfile.withPerfectQuizReward();
+          await updated.save();
+        }
+      }
+
       setState(() {
         _quizCompleted = true;
       });
+
+      // Submit results to backend learning service
+      try {
+        await LearningService.submitQuizResult(
+          buildingId: widget.building.id,
+          subject: widget.building.subject,
+          correctAnswers: _score,
+          totalQuestions: _content!.questions.length,
+        );
+      } catch (_) {}
     }
   }
 
@@ -314,78 +300,106 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
 
   // ── PIXEL ART PANEL HEADER ──────────────────────────────────────────────────
   Widget _buildPanelHeader(Color themeColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: _bgMid,
-        border: Border(bottom: BorderSide(color: _gold, width: 2)),
-      ),
-      child: Row(
-        children: [
-          // Building Icon Box (pixel-bordered)
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _bgPanel,
-              border: Border.all(color: themeColor, width: 2),
-              boxShadow: const [
-                BoxShadow(color: Colors.black, offset: Offset(3, 3)),
-              ],
-            ),
-            child: Center(
-              child: Icon(widget.building.icon, color: themeColor, size: 22),
-            ),
+    return ValueListenableBuilder<PlayerProfile?>(
+      valueListenable: PlayerProfile.notifier,
+      builder: (context, profileValue, _) {
+        final profile = profileValue ?? PlayerProfile.current ?? const PlayerProfile();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: _bgMid,
+            border: Border(bottom: BorderSide(color: _gold, width: 2)),
           ),
-          const SizedBox(width: 12),
+          child: Row(
+            children: [
+              // Building Icon Box (pixel-bordered)
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _bgPanel,
+                  border: Border.all(color: themeColor, width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black, offset: Offset(2, 2)),
+                  ],
+                ),
+                child: Center(
+                  child: Icon(widget.building.icon, color: themeColor, size: 20),
+                ),
+              ),
+              const SizedBox(width: 10),
 
-          // Building name & subject
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.building.name.toUpperCase(),
-                  style: GoogleFonts.pressStart2p(
-                    fontSize: 10,
-                    color: _gold,
-                    shadows: const [
-                      Shadow(color: _goldShadow, offset: Offset(2, 2)),
+              // Building name & subject
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.building.name.toUpperCase(),
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 9,
+                        color: _gold,
+                        shadows: const [
+                          Shadow(color: _goldShadow, offset: Offset(2, 2)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${widget.building.subject} • LVL ${profile.level}',
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 6.5,
+                        color: themeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Live Player Stats Pill inside Learning Panel
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _bgDark,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF4D4635)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('🪙 ${profile.coins}', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFF9E2AF))),
+                    const SizedBox(width: 6),
+                    Text('💎 ${profile.gems}', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFCBA6F7))),
+                    const SizedBox(width: 6),
+                    Text('⚡ ${profile.energy}', style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFF89B4FA))),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Pixel Close Button
+              GestureDetector(
+                onTap: widget.onClose,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: _bgPanel,
+                    border: Border.all(color: _red, width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black, offset: Offset(2, 2)),
                     ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${widget.building.subject}  •  LVL ${widget.building.level}',
-                  style: GoogleFonts.pressStart2p(
-                    fontSize: 7,
-                    color: themeColor,
+                  child: const Center(
+                    child: Icon(Icons.close, color: _red, size: 16),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          // Pixel Close Button
-          GestureDetector(
-            onTap: widget.onClose,
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: _bgPanel,
-                border: Border.all(color: _red, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black, offset: Offset(2, 2)),
-                ],
               ),
-              child: const Center(
-                child: Icon(Icons.close, color: _red, size: 16),
-              ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -949,6 +963,29 @@ class _BuildingLearningPanelState extends State<BuildingLearningPanel>
                 ],
               ),
             ),
+
+            if (_score == (_content?.questions.length ?? 4)) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF28283D),
+                  border: Border.all(color: const Color(0xFFDEB7FF), width: 2),
+                  boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(3, 3))],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.diamond_rounded, color: Color(0xFFDEB7FF), size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      '+5 DIAMONDS! PERFECT SCORE ★',
+                      style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFDEB7FF)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 28),
 
             Row(

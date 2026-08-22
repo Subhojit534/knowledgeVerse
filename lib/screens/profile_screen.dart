@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player_profile.dart';
 import '../services/api_service.dart';
+import 'settings_screen.dart';
 
 class SubjectDistrict {
   final String name;
@@ -29,9 +30,8 @@ class SubjectDistrict {
 }
 
 /// "Knowledgeverse Profile Page - Expanded Layout" with Authentic 16-Bit Pixel Art Theme.
-/// Features retro pixel typography (Press Start 2P), 16-bit stepped progress bars,
-/// ornate pixel frames with jeweled corner accents, and a perfectly fitted 3-stat panel
-/// (Streak, Focus XP, Diamonds) on the bottom-left.
+/// Connected with real-time level progression, daily streak, live focus XP, diamonds/gems,
+/// energy capacity, and weekly activity tracker.
 class ProfileScreen extends StatefulWidget {
   final PlayerProfile? profile;
   const ProfileScreen({super.key, this.profile});
@@ -84,16 +84,52 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _playerName = 'WIZARD ARCHITECT';
+  PlayerProfile _profile = const PlayerProfile();
+  String _playerName = 'EXPLORER';
   String _playerTitle = 'Civilization Architect';
-  int _xp = 1450;
-  int _level = 4;
-  int _coins = 1240;
+  int _xp = 150;
+  int _level = 1;
+  int _focusXp = 150;
+  int _coins = 500;
+  int _gems = 25;
+  int _energy = 100;
+  int _streakDays = 1;
+  int _weeklyQuestions = 12;
 
   @override
   void initState() {
     super.initState();
     _loadSavedProfile();
+    PlayerProfile.notifier.addListener(_onProfileChanged);
+  }
+
+  @override
+  void dispose() {
+    PlayerProfile.notifier.removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  void _onProfileChanged() {
+    final active = PlayerProfile.notifier.value;
+    if (active != null && mounted) {
+      setState(() {
+        _profile = active;
+        if (active.name.isNotEmpty) {
+          _playerName = active.name.toUpperCase();
+        }
+        if (active.learningGoal.isNotEmpty) {
+          _playerTitle = active.learningGoal;
+        }
+        _xp = active.xp;
+        _level = active.level;
+        _focusXp = active.focusXp;
+        _coins = active.coins;
+        _gems = active.gems;
+        _energy = active.energy;
+        _streakDays = active.streakDays;
+        _weeklyQuestions = active.weeklyQuestions;
+      });
+    }
   }
 
   Future<void> _loadSavedProfile() async {
@@ -105,17 +141,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       localName = prefs.getString('player_name')?.trim();
     }
 
-    if (localName != null && localName.isNotEmpty && mounted) {
+    if (active != null && mounted) {
       setState(() {
-        _playerName = localName!.toUpperCase();
-        if (active != null) {
-          if (active.learningGoal.isNotEmpty) {
-            _playerTitle = active.learningGoal;
-          }
-          _xp = active.xp;
-          _level = active.level;
-          _coins = active.coins;
+        _profile = active;
+        _playerName = active.name.isNotEmpty ? active.name.toUpperCase() : (localName?.toUpperCase() ?? 'EXPLORER');
+        if (active.learningGoal.isNotEmpty) {
+          _playerTitle = active.learningGoal;
         }
+        _xp = active.xp;
+        _level = active.level;
+        _focusXp = active.focusXp;
+        _coins = active.coins;
+        _gems = active.gems;
+        _energy = active.energy;
+        _streakDays = active.streakDays;
+        _weeklyQuestions = active.weeklyQuestions;
       });
     }
 
@@ -135,30 +175,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final p = data['profile'] as Map<String, dynamic>?;
         if (p != null && mounted) {
           final serverName = (p['name'] as String?)?.trim();
+          final serverXp = p['xp'] as int? ?? _xp;
+          final serverCoins = p['coins'] as int? ?? _coins;
+          final serverLevel = p['level'] as int? ?? PlayerProfile.computeLevel(serverXp);
+
           setState(() {
             if (serverName != null && serverName.isNotEmpty) {
               _playerName = serverName.toUpperCase();
-            } else if (localName != null && localName.isNotEmpty) {
-              _playerName = localName.toUpperCase();
             }
             if ((p['learning_goal'] as String?)?.isNotEmpty == true) {
               _playerTitle = p['learning_goal'] as String;
             }
-            _xp = p['xp'] as int? ?? _xp;
-            _level = p['level'] as int? ?? _level;
-            _coins = p['coins'] as int? ?? _coins;
+            _xp = serverXp;
+            _level = serverLevel;
+            _coins = serverCoins;
+            _profile = _profile.copyWith(
+              xp: _xp,
+              level: _level,
+              coins: _coins,
+            );
           });
 
-          // Persist updated profile
-          final updated = (active ?? const PlayerProfile()).copyWith(
-            id: p['id'] as String?,
-            name: serverName ?? localName,
-            learningGoal: p['learning_goal'] as String?,
-            xp: _xp,
-            level: _level,
-            coins: _coins,
-          );
-          await updated.save();
+          await _profile.save();
         }
       }
     } catch (_) {}
@@ -215,7 +253,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SafeArea(
             child: Column(
               children: [
-                // Top Header Bar (Back button + Pixel Currency Stat Badges)
+                // Top Header Bar (Back button + Pixel Currency Stat Badges + Settings)
                 _buildHeader(context),
 
                 // Scrollable Dashboard Body
@@ -317,39 +355,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _StatBadge(
                     icon: Icons.monetization_on_rounded,
                     iconColor: const Color(0xFFF2CA50),
-                    label: '1,240',
+                    label: '$_coins',
                     textColor: const Color(0xFFF2CA50),
                   ),
                   const SizedBox(width: 6),
                   _StatBadge(
                     icon: Icons.diamond_rounded,
                     iconColor: const Color(0xFFDEB7FF),
-                    label: '24',
+                    label: '$_gems',
                     textColor: const Color(0xFFDEB7FF),
                   ),
                   const SizedBox(width: 6),
                   _StatBadge(
                     icon: Icons.bolt_rounded,
                     iconColor: const Color(0xFF9DDCBB),
-                    label: '100/100',
+                    label: '$_energy/100',
                     textColor: const Color(0xFF9DDCBB),
                   ),
                   const SizedBox(width: 6),
                   _StatBadge(
                     icon: Icons.layers_rounded,
                     iconColor: const Color(0xFF60A5FA),
-                    label: '450 XP',
+                    label: '$_focusXp XP',
                     textColor: const Color(0xFF60A5FA),
                   ),
                   const SizedBox(width: 6),
+                  // Settings Button opens SettingsScreen!
                   GestureDetector(
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Settings opened'),
-                          backgroundColor: Color(0xFF6B13AF),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
                       );
                     },
                     child: _OrnatePixelBox(
@@ -370,8 +406,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── UNIFIED LEFT PROFILE & STATS PANEL (MERGED INTO 1 SINGLE CARD!) ───────
+  // ── UNIFIED LEFT PROFILE & STATS PANEL ─────────────────────────────────────
   Widget _buildLeftProfileSection() {
+    final double levelProgress = _profile.levelProgressRatio;
+    final int currentLvlXp = _profile.currentLevelXp;
+    final int progressPercent = (levelProgress * 100).toInt();
+
     return _OrnateFrameCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -427,7 +467,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       child: Text(
-                        'LVL 14',
+                        'LVL $_level',
                         style: GoogleFonts.pressStart2p(
                           fontSize: 12,
                           color: const Color(0xFFF2CA50),
@@ -437,11 +477,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 8),
 
                     // Stepped 16-bit XP Bar
-                    _buildPixelProgressBar(ratio: 0.7),
+                    _buildPixelProgressBar(ratio: levelProgress),
 
                     const SizedBox(height: 6),
                     Text(
-                      '840 / 1200 XP',
+                      '$currentLvlXp / ${_profile.nextLevelXpRequired} XP (Total: $_xp)',
                       style: GoogleFonts.pressStart2p(
                         fontSize: 7,
                         color: const Color(0xFFD0C5AF),
@@ -496,7 +536,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               Text(
-                '70%',
+                '$progressPercent%',
                 style: GoogleFonts.pressStart2p(
                   fontSize: 8,
                   color: const Color(0xFF82C0A0),
@@ -505,7 +545,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          _buildPixelProgressBar(ratio: 0.7),
+          _buildPixelProgressBar(ratio: levelProgress),
 
           const SizedBox(height: 16),
           const Divider(color: Color(0xFF4D4635), height: 1),
@@ -517,9 +557,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // 1. Day Streak Card
               Expanded(
                 child: _buildEmbeddedStatBlock(
-                  icon: Icons.star_rounded,
+                  icon: Icons.local_fire_department_rounded,
                   iconColor: const Color(0xFFF2CA50),
-                  value: '42',
+                  value: '$_streakDays D',
                   valueColor: const Color(0xFFF2CA50),
                   label: 'STREAK',
                 ),
@@ -529,9 +569,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // 2. Focus XP Card
               Expanded(
                 child: _buildEmbeddedStatBlock(
-                  icon: Icons.local_fire_department_rounded,
+                  icon: Icons.layers_rounded,
                   iconColor: const Color(0xFF60A5FA),
-                  value: '8.4K',
+                  value: '$_focusXp',
                   valueColor: const Color(0xFF60A5FA),
                   label: 'FOCUS XP',
                 ),
@@ -543,7 +583,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: _buildEmbeddedStatBlock(
                   icon: Icons.diamond_rounded,
                   iconColor: const Color(0xFFDEB7FF),
-                  value: '24',
+                  value: '$_gems',
                   valueColor: const Color(0xFFDEB7FF),
                   label: 'DIAMOND',
                 ),
@@ -601,6 +641,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ── RIGHT VITALITY SECTION ─────────────────────────────────────────────────
   Widget _buildRightVitalitySection() {
+    final now = DateTime.now();
+    final int currentWeekday = now.weekday; // 1 = Mon, 7 = Sun
+    final double baseRatio = (_weeklyQuestions / 20.0).clamp(0.2, 1.0);
+
     return _OrnateFrameCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -633,7 +677,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'BLOOMING',
+                      '$_weeklyQuestions QUESTS',
                       style: GoogleFonts.pressStart2p(
                         fontSize: 7,
                         color: const Color(0xFF9DDCBB),
@@ -659,34 +703,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               crossAxisAlignment: CrossAxisAlignment.end,
-              children: const [
-                _VitalityBarColumn(
-                    day: 'M', fillRatio: 0.6, icon: Icons.local_florist_rounded),
-                _VitalityBarColumn(
-                    day: 'T', fillRatio: 0.85, icon: Icons.local_florist_rounded),
-                _VitalityBarColumn(
-                    day: 'W', fillRatio: 0.7, icon: Icons.local_florist_rounded),
-                _VitalityBarColumn(
-                  day: 'T',
-                  fillRatio: 1.0,
-                  icon: Icons.filter_vintage_rounded,
-                  isActive: true,
-                ),
-                _VitalityBarColumn(
-                    day: 'F',
-                    fillRatio: 0.2,
-                    icon: Icons.local_florist_rounded,
-                    isFuture: true),
-                _VitalityBarColumn(
-                    day: 'S',
-                    fillRatio: 0.15,
-                    icon: Icons.local_florist_rounded,
-                    isFuture: true),
-                _VitalityBarColumn(
-                    day: 'S',
-                    fillRatio: 0.25,
-                    icon: Icons.local_florist_rounded,
-                    isFuture: true),
+              children: [
+                _VitalityBarColumn(day: 'M', fillRatio: currentWeekday >= 1 ? (baseRatio * 0.8).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 1, isFuture: currentWeekday < 1),
+                _VitalityBarColumn(day: 'T', fillRatio: currentWeekday >= 2 ? (baseRatio * 0.9).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 2, isFuture: currentWeekday < 2),
+                _VitalityBarColumn(day: 'W', fillRatio: currentWeekday >= 3 ? (baseRatio * 0.7).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 3, isFuture: currentWeekday < 3),
+                _VitalityBarColumn(day: 'T', fillRatio: currentWeekday >= 4 ? baseRatio : 0.15, icon: Icons.filter_vintage_rounded, isActive: currentWeekday == 4, isFuture: currentWeekday < 4),
+                _VitalityBarColumn(day: 'F', fillRatio: currentWeekday >= 5 ? (baseRatio * 0.85).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 5, isFuture: currentWeekday < 5),
+                _VitalityBarColumn(day: 'S', fillRatio: currentWeekday >= 6 ? (baseRatio * 0.6).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 6, isFuture: currentWeekday < 6),
+                _VitalityBarColumn(day: 'S', fillRatio: currentWeekday >= 7 ? (baseRatio * 0.75).clamp(0.1, 1.0) : 0.15, icon: Icons.local_florist_rounded, isActive: currentWeekday == 7, isFuture: currentWeekday < 7),
               ],
             ),
           ),
@@ -793,7 +817,7 @@ class _VitalityBarColumn extends StatelessWidget {
                 alignment: Alignment.bottomCenter,
                 child: FractionallySizedBox(
                   widthFactor: 1.0,
-                  heightFactor: fillRatio,
+                  heightFactor: fillRatio.clamp(0.05, 1.0),
                   child: Container(
                     decoration: BoxDecoration(
                       color: isActive

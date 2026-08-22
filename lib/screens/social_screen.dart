@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -114,7 +115,6 @@ class _SocialScreenState extends State<SocialScreen> {
   List<FriendModel> _myAcceptedFriends = [];
   List<PendingFriendRequestModel> _pendingReceivedList = [];
   Set<String> _pendingSentFriendIds = {};
-  bool _isLoading = true;
 
   // Guild State
   bool _hasGuild = false;
@@ -134,6 +134,7 @@ class _SocialScreenState extends State<SocialScreen> {
   final TextEditingController _chatController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
+  Timer? _chatPollTimer;
   String _myPlayerName = 'Explorer';
   String _myUserId = 'demo-user-123';
 
@@ -141,6 +142,65 @@ class _SocialScreenState extends State<SocialScreen> {
   void initState() {
     super.initState();
     _loadStateAndProfiles();
+    _startChatPollingTimer();
+  }
+
+  @override
+  void dispose() {
+    _chatPollTimer?.cancel();
+    _createGuildNameController.dispose();
+    _createGuildTagController.dispose();
+    _createGuildMottoController.dispose();
+    _chatController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _startChatPollingTimer() {
+    _chatPollTimer?.cancel();
+    _chatPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      // Poll automatically whenever guild tab is active and user is in a guild
+      if (_activeRailIndex == 1 && _hasGuild && _myGuildId.isNotEmpty) {
+        _pollGuildMessages();
+      }
+    });
+  }
+
+  Future<void> _pollGuildMessages() async {
+    if (!_hasGuild || _myGuildId.isEmpty) return;
+    try {
+      final res = await ApiService.get('/api/guilds/messages?guildId=$_myGuildId');
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final messagesList = data['messages'] as List<dynamic>? ?? [];
+        final newMessages = messagesList.map((msg) {
+          final m = msg as Map<String, dynamic>;
+          final timeStr = m['created_at'] != null
+              ? DateTime.tryParse(m['created_at'] as String)?.toLocal().toString().substring(11, 16) ?? 'Now'
+              : 'Now';
+          return GuildChatMessage(
+            sender: m['sender_name'] as String? ?? 'Scholar',
+            role: m['role'] as String? ?? 'Member',
+            text: m['text'] as String? ?? '',
+            time: timeStr,
+          );
+        }).toList();
+
+        // Only setState if new messages arrived
+        if (newMessages.length != _chatMessages.length ||
+            (newMessages.isNotEmpty && _chatMessages.isNotEmpty && newMessages.last.text != _chatMessages.last.text)) {
+          if (mounted) {
+            setState(() {
+              _chatMessages = newMessages;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadStateAndProfiles() async {
@@ -151,15 +211,19 @@ class _SocialScreenState extends State<SocialScreen> {
     }
 
     try {
-      // 1. Fetch Friends & Explorers
-      final friendsRes = await ApiService.get('/api/social/friends?userId=$_myUserId');
-      if (friendsRes.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(friendsRes.bodyBytes)) as Map<String, dynamic>;
+      // 1. Fast Unified Dashboard (single-hop parallel request <0.3s)
+      final dashboardRes = await ApiService.get('/api/social/dashboard?userId=$_myUserId');
+      if (dashboardRes.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(dashboardRes.bodyBytes)) as Map<String, dynamic>;
 
         final rawExplorers = data['availableExplorers'] as List<dynamic>? ?? [];
         final rawFriends = data['friends'] as List<dynamic>? ?? [];
         final rawPendingReceived = data['pendingReceived'] as List<dynamic>? ?? [];
         final rawPendingSent = data['pendingSent'] as List<dynamic>? ?? [];
+        final g = data['myGuild'] as Map<String, dynamic>?;
+        final membersList = data['guildMembers'] as List<dynamic>? ?? [];
+        final messagesList = data['guildMessages'] as List<dynamic>? ?? [];
+        final guildsList = data['publicGuilds'] as List<dynamic>? ?? [];
 
         final colors = [
           const Color(0xFFDEB7FF),
@@ -213,6 +277,67 @@ class _SocialScreenState extends State<SocialScreen> {
           parsedPendingSent.add(item.toString());
         }
 
+        // Parse Guild Data
+        if (g != null) {
+          _hasGuild = true;
+          _myGuildId = g['id'] as String? ?? '';
+          _myGuildName = g['name'] as String? ?? '';
+          _myGuildTag = g['tag'] as String? ?? '';
+          _myGuildMotto = g['motto'] as String? ?? '';
+
+          _guildMembers = membersList.map((m) {
+            final mm = m as Map<String, dynamic>;
+            return GuildMemberModel(
+              id: mm['user_id'] as String? ?? mm['id'] as String? ?? '',
+              name: mm['name'] as String? ?? 'Scholar',
+              role: mm['role'] as String? ?? 'Member',
+              level: mm['level'] as int? ?? 1,
+              weeklyXp: mm['weekly_xp'] as int? ?? 0,
+              isOnline: mm['is_online'] as bool? ?? true,
+            );
+          }).toList();
+
+          final meMember = _guildMembers.firstWhere(
+            (m) => m.id == _myUserId || m.name.toLowerCase() == _myPlayerName.toLowerCase(),
+            orElse: () => GuildMemberModel(id: _myUserId, name: _myPlayerName, role: 'Member', level: 1, weeklyXp: 0, isOnline: true),
+          );
+          _myGuildRole = meMember.role;
+
+          _chatMessages = messagesList.map((msg) {
+            final m = msg as Map<String, dynamic>;
+            final timeStr = m['created_at'] != null
+                ? DateTime.tryParse(m['created_at'] as String)?.toLocal().toString().substring(11, 16) ?? 'Now'
+                : 'Now';
+            return GuildChatMessage(
+              sender: m['sender_name'] as String? ?? 'Scholar',
+              role: m['role'] as String? ?? 'Member',
+              text: m['text'] as String? ?? '',
+              time: timeStr,
+            );
+          }).toList();
+        } else {
+          _hasGuild = false;
+          _myGuildId = '';
+          _myGuildName = '';
+          _myGuildTag = '';
+          _myGuildMotto = '';
+          _guildMembers = [];
+          _chatMessages = [];
+        }
+
+        _publicGuilds = guildsList.map((gItem) {
+          final gg = gItem as Map<String, dynamic>;
+          return GuildModel(
+            id: gg['id'] as String? ?? '',
+            name: gg['name'] as String? ?? '',
+            tag: gg['tag'] as String? ?? '',
+            motto: gg['motto'] as String? ?? '',
+            memberCount: gg['member_count'] as int? ?? 1,
+            maxMembers: gg['max_members'] as int? ?? 20,
+            level: gg['level'] as int? ?? 1,
+          );
+        }).toList();
+
         if (mounted) {
           setState(() {
             _allAvailableProfiles = parsedExplorers;
@@ -224,21 +349,76 @@ class _SocialScreenState extends State<SocialScreen> {
             }
           });
         }
+      } else {
+        // Fallback: Parallel requests
+        await Future.wait([
+          _loadFriendsDataFallback(),
+          _loadGuildData(),
+        ]);
       }
-
-      // 2. Fetch Guild Data
-      await _loadGuildData();
     } catch (e) {
       debugPrint('❌ [SocialScreen Load Error]: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _loadGuildData() async {
+  Future<void> _loadFriendsDataFallback() async {
     try {
-      // Fetch My Guild
-      final myGuildRes = await ApiService.get('/api/guilds/my?userId=$_myUserId');
+      final friendsRes = await ApiService.get('/api/social/friends?userId=$_myUserId');
+      if (friendsRes.statusCode == 200 && mounted) {
+        final data = jsonDecode(utf8.decode(friendsRes.bodyBytes)) as Map<String, dynamic>;
+        final rawExplorers = data['availableExplorers'] as List<dynamic>? ?? [];
+        final rawFriends = data['friends'] as List<dynamic>? ?? [];
+        final colors = [
+          const Color(0xFFDEB7FF),
+          const Color(0xFF60A5FA),
+          const Color(0xFFF2CA50),
+          const Color(0xFF82C0A0)
+        ];
+
+        FriendModel parseFriendModel(Map<String, dynamic> p, int i) {
+          final name = (p['name'] as String? ?? 'Explorer').trim();
+          return FriendModel(
+            id: p['id'] as String? ?? 'f_$i',
+            name: name,
+            title: p['title'] as String? ?? p['learning_goal'] as String? ?? 'Civilization Architect',
+            level: p['level'] as int? ?? 1,
+            xp: p['xp'] as int? ?? 100,
+            avatarInitial: name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'E',
+            avatarColor: colors[i % colors.length],
+            district: p['district'] as String? ?? 'Academy District',
+            isOnline: true,
+            lastActive: 'Active Now',
+            streakDays: p['streakDays'] as int? ?? p['streak_days'] as int? ?? 7,
+            guildName: p['guildName'] as String? ?? p['guild_name'] as String? ?? 'Academy District',
+            subjectProgress: {'Math': 0.85, 'CS': 0.90, 'Physics': 0.75},
+          );
+        }
+
+        setState(() {
+          _allAvailableProfiles = rawExplorers.asMap().entries.map((e) => parseFriendModel(e.value, e.key)).toList();
+          _myAcceptedFriends = rawFriends.asMap().entries.map((e) => parseFriendModel(e.value, e.key)).toList();
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadGuildData() async {
+    final profile = PlayerProfile.current ?? await PlayerProfile.load();
+    if (profile != null) {
+      if (profile.name.trim().isNotEmpty) _myPlayerName = profile.name.trim();
+      if (profile.id.trim().isNotEmpty) _myUserId = profile.id.trim();
+    }
+
+    try {
+      // Execute both in parallel
+      final results = await Future.wait([
+        ApiService.get('/api/guilds/my?userId=$_myUserId'),
+        ApiService.get('/api/guilds'),
+      ]);
+
+      final myGuildRes = results[0];
+      final allGuildsRes = results[1];
+
       if (myGuildRes.statusCode == 200) {
         final data = jsonDecode(utf8.decode(myGuildRes.bodyBytes)) as Map<String, dynamic>;
         final g = data['guild'] as Map<String, dynamic>?;
@@ -293,8 +473,6 @@ class _SocialScreenState extends State<SocialScreen> {
         }
       }
 
-      // Fetch Public Guilds Directory
-      final allGuildsRes = await ApiService.get('/api/guilds');
       if (allGuildsRes.statusCode == 200) {
         final data = jsonDecode(utf8.decode(allGuildsRes.bodyBytes)) as Map<String, dynamic>;
         final guildsList = data['guilds'] as List<dynamic>? ?? [];
@@ -484,6 +662,20 @@ class _SocialScreenState extends State<SocialScreen> {
 
     _chatController.clear();
 
+    // 0ms Optimistic UI Append
+    final now = DateTime.now();
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final optimisticMsg = GuildChatMessage(
+      sender: _myPlayerName,
+      role: _myGuildRole,
+      text: text,
+      time: timeStr,
+    );
+
+    setState(() {
+      _chatMessages.add(optimisticMsg);
+    });
+
     try {
       final res = await ApiService.post('/api/guilds/chat', body: {
         'guildId': _myGuildId,
@@ -492,7 +684,7 @@ class _SocialScreenState extends State<SocialScreen> {
       });
 
       if (res.statusCode == 200) {
-        await _loadGuildData();
+        _pollGuildMessages();
       }
     } catch (e) {
       debugPrint('❌ [Send Guild Chat Error]: $e');
@@ -562,22 +754,6 @@ class _SocialScreenState extends State<SocialScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF0F0F1A),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(color: Color(0xFFF2CA50)),
-              const SizedBox(height: 12),
-              Text('LOADING SOCIAL HALL...', style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
       body: SafeArea(
@@ -681,7 +857,12 @@ class _SocialScreenState extends State<SocialScreen> {
           final isSelected = _activeRailIndex == idx;
           final item = navItems[idx];
           return GestureDetector(
-            onTap: () => setState(() => _activeRailIndex = idx),
+            onTap: () {
+              setState(() => _activeRailIndex = idx);
+              if (idx == 1) {
+                _loadGuildData();
+              }
+            },
             child: Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1013,7 +1194,10 @@ class _SocialScreenState extends State<SocialScreen> {
     final isSelected = _guildSubTab == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _guildSubTab = index),
+        onTap: () {
+          setState(() => _guildSubTab = index);
+          _loadGuildData();
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(

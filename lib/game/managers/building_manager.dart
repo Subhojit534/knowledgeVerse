@@ -59,7 +59,7 @@ class BuildingManager extends ChangeNotifier {
 
     final int nextLevel = existing.level + 1;
     final int leftoverXp = existing.currentXp - existing.xpRequired;
-    final int nextXpRequired = (nextLevel == 2) ? 700 : 9999;
+    final int nextXpRequired = nextLevel * 300;
 
     final updated = BuildingData(
       id: existing.id,

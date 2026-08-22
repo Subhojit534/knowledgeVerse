@@ -3,11 +3,14 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame_tiled/flame_tiled.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/asset_paths.dart';
+import '../../models/player_profile.dart';
 import '../buildings/building_component.dart';
-import '../buildings/sample_building_data.dart';
+import '../buildings/curriculum_buildings_catalog.dart';
 import '../managers/asset_manager.dart';
+import '../managers/building_manager.dart';
 import '../managers/game_state.dart';
 import '../managers/game_state_manager.dart';
 import '../pathfinding/a_star_pathfinder.dart';
@@ -329,71 +332,56 @@ class WorldMap extends World
     }
   }
 
-  // ─── Handcrafted Building Layout around Central Plaza (800, 520) ───────────
+  // ─── Dynamic Chapter Buildings Layout around Central Plaza (800, 520) ──────
 
   Future<void> _loadBuildings() async {
-    final configs = [
-      // 1. North: Grand Hall (Hub & Headquarters)
-      BuildingComponent(
-        buildingData: SampleBuildingData.grandHall,
-        position: Vector2(800.0, 210.0),
-        size: Vector2(190, 175),
-        triggerRadius: 75,
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
+    final prefs = await SharedPreferences.getInstance();
+    final activeSubject = prefs.getString('activeSubject') ?? 'Mathematics';
+    final profile = PlayerProfile.current ?? await PlayerProfile.load();
+    final grade = (profile != null && profile.grade.trim().isNotEmpty)
+        ? profile.grade.trim()
+        : 'Class 10';
 
-      // 2. North West: Library (Lore & Theory)
-      BuildingComponent(
-        buildingData: SampleBuildingData.library,
-        position: Vector2(400.0, 260.0),
-        size: Vector2(150, 142),
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
+    final catalogList = CurriculumBuildingsCatalog.getBuildingsFor(
+      subject: activeSubject,
+      grade: grade,
+    );
 
-      // 3. North East: Astronomy Tower (Physics & Space)
-      BuildingComponent(
-        buildingData: SampleBuildingData.astronomyTower,
-        position: Vector2(1200.0, 260.0),
-        size: Vector2(142, 142),
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
-
-      // 4. West: Arena (PvP Battles)
-      BuildingComponent(
-        buildingData: SampleBuildingData.arena,
-        position: Vector2(310.0, 520.0),
-        size: Vector2(155, 150),
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
-
-      // 5. South West: Potion Lab (Chemistry & Potions)
-      BuildingComponent(
-        buildingData: SampleBuildingData.potionLab,
-        position: Vector2(440.0, 770.0),
-        size: Vector2(145, 140),
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
-
-      // 6. South East: Coding Tower (Programming & Code)
-      BuildingComponent(
-        buildingData: SampleBuildingData.codingTower,
-        position: Vector2(1160.0, 770.0),
-        size: Vector2(140, 138),
-        onPlayerEnter: (b) => _handleEnter(b),
-        onPlayerLeave: (b) => _handleLeave(b),
-        onInteract: (b) => _handleInteract(b),
-      ),
+    final positions = [
+      Vector2(800.0, 210.0),  // 1. North
+      Vector2(400.0, 260.0),  // 2. North West
+      Vector2(1200.0, 260.0), // 3. North East
+      Vector2(310.0, 520.0),  // 4. West
+      Vector2(440.0, 770.0),  // 5. South West
+      Vector2(1160.0, 770.0), // 6. South East
     ];
+
+    final sizes = [
+      Vector2(190, 175),
+      Vector2(150, 142),
+      Vector2(142, 142),
+      Vector2(155, 150),
+      Vector2(145, 140),
+      Vector2(140, 138),
+    ];
+
+    final configs = <BuildingComponent>[];
+    for (int i = 0; i < catalogList.length && i < positions.length; i++) {
+      final bData = catalogList[i];
+      BuildingManager().registerBuilding(bData);
+
+      configs.add(
+        BuildingComponent(
+          buildingData: bData,
+          position: positions[i],
+          size: sizes[i],
+          triggerRadius: i == 0 ? 75 : 65,
+          onPlayerEnter: (b) => _handleEnter(b),
+          onPlayerLeave: (b) => _handleLeave(b),
+          onInteract: (b) => _handleInteract(b),
+        ),
+      );
+    }
 
     buildings.addAll(configs);
     await addAll(configs);

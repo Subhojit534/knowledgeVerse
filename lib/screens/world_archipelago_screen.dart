@@ -178,6 +178,17 @@ class _WorldArchipelagoScreenState extends State<WorldArchipelagoScreen>
   late AnimationController _animController;
   final Set<String> _unlockedSubjects = {
     'Mathematics',
+    'Physics & Space',
+    'Physics',
+    'History & Civics',
+    'History',
+    'Biology & Life',
+    'Biology',
+    'Chemistry',
+    'Computer Science',
+    'Programming',
+    'PvP Duel Arena',
+    'Arena',
   };
 
   @override
@@ -196,13 +207,6 @@ class _WorldArchipelagoScreenState extends State<WorldArchipelagoScreen>
     final p = widget.profile ?? PlayerProfile.current ?? await PlayerProfile.load();
     if (p != null) {
       PlayerProfile.current = p;
-      if (p.subjects.isNotEmpty && mounted) {
-        setState(() {
-          for (final s in p.subjects) {
-            _unlockedSubjects.add(s);
-          }
-        });
-      }
     }
   }
 

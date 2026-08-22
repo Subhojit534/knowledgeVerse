@@ -45,7 +45,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<LeaderboardEntry> _entries = [];
-  bool _isLoading = true;
   String _myPlayerName = 'EXPLORER';
 
   @override
@@ -54,7 +53,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     _fetchLiveLeaderboard();
   }
 
-  Future<void> _fetchLiveLeaderboard() async {
+  Future<void> _fetchLiveLeaderboard([String category = 'GLOBAL']) async {
     final profile = await PlayerProfile.load();
     if (profile != null && profile.name.trim().isNotEmpty && mounted) {
       setState(() {
@@ -63,7 +62,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
 
     try {
-      final res = await ApiService.get('/api/leaderboard');
+      final queryParam = category.toUpperCase() == 'GLOBAL' ? '' : '?category=$category';
+      final res = await ApiService.get('/api/leaderboard$queryParam');
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final rawList = data['leaderboard'] as List<dynamic>? ?? [];
@@ -78,7 +78,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           final score = map['score'] as int? ?? (map['xp'] as int? ?? 0);
           final streakDays = map['streakDays'] as int? ?? 7;
           final initial = (name.isNotEmpty) ? name.substring(0, 1).toUpperCase() : 'W';
-          
+
           Color crownColor = Colors.transparent;
           if (rank == 1) crownColor = const Color(0xFFF2CA50);
           if (rank == 2) crownColor = const Color(0xFFC0C0C0);
@@ -94,15 +94,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             streakDays: streakDays,
             crownColor: crownColor,
             avatarInitial: initial,
-            avatarColor: rank == 1 ? const Color(0xFFF2CA50) : rank == 2 ? const Color(0xFFDEB7FF) : const Color(0xFF60A5FA),
+            avatarColor: rank == 1
+                ? const Color(0xFFF2CA50)
+                : rank == 2
+                    ? const Color(0xFFDEB7FF)
+                    : const Color(0xFF60A5FA),
             domainMastery: map['domainMastery'] as String? ?? 'General (85%)',
           ));
         }
 
-        if (mounted && parsed.isNotEmpty) {
+        if (mounted) {
           setState(() {
             _entries = parsed;
-            _isLoading = false;
           });
           return;
         }
@@ -113,79 +116,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     if (mounted) {
       setState(() {
-        _entries = _fallbackEntries;
-        _isLoading = false;
+        _entries = [];
       });
     }
   }
-
-  static const List<LeaderboardEntry> _fallbackEntries = [
-    LeaderboardEntry(
-      rank: 1,
-      name: 'Victoria Prime',
-      title: 'Grand Archon',
-      level: 25,
-      score: 48920,
-      guildTag: 'OMN',
-      streakDays: 45,
-      crownColor: Color(0xFFF2CA50),
-      avatarInitial: 'V',
-      avatarColor: Color(0xFFF2CA50),
-      domainMastery: 'Mathematics (100%)',
-    ),
-    LeaderboardEntry(
-      rank: 2,
-      name: 'Elena Vance',
-      title: 'Grand Sorceress',
-      level: 22,
-      score: 42150,
-      guildTag: 'ARC',
-      streakDays: 38,
-      crownColor: Color(0xFFC0C0C0),
-      avatarInitial: 'E',
-      avatarColor: Color(0xFFDEB7FF),
-      domainMastery: 'Physics (98%)',
-    ),
-    LeaderboardEntry(
-      rank: 3,
-      name: 'Marcus Sol',
-      title: 'Quantum Master',
-      level: 20,
-      score: 38400,
-      guildTag: 'ARC',
-      streakDays: 29,
-      crownColor: Color(0xFFCD7F32),
-      avatarInitial: 'M',
-      avatarColor: Color(0xFF60A5FA),
-      domainMastery: 'Quantum Computing (95%)',
-    ),
-    LeaderboardEntry(
-      rank: 4,
-      name: 'Darius Vance',
-      title: 'Cipher Lord',
-      level: 19,
-      score: 31200,
-      guildTag: 'HEX',
-      streakDays: 24,
-      crownColor: Colors.transparent,
-      avatarInitial: 'D',
-      avatarColor: Color(0xFF82C0A0),
-      domainMastery: 'Computer Science (94%)',
-    ),
-    LeaderboardEntry(
-      rank: 5,
-      name: 'Lyra Moon',
-      title: 'Royal Archivist',
-      level: 18,
-      score: 28950,
-      guildTag: 'LIB',
-      streakDays: 19,
-      crownColor: Colors.transparent,
-      avatarInitial: 'L',
-      avatarColor: Color(0xFFF28B82),
-      domainMastery: 'History (99%)',
-    ),
-  ];
 
   @override
   void dispose() {
@@ -380,10 +314,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      // Loading state indicator
-    }
-    final list = _entries.isNotEmpty ? _entries : _fallbackEntries;
+    final list = _entries;
     final filteredEntries = list.where((e) {
       if (_searchQuery.isEmpty) return true;
       return e.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -419,9 +350,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         const SizedBox(height: 14),
 
                         // Rankings Roster Cards (#4 onwards)
-                        ...filteredEntries
-                            .where((e) => e.rank > 3)
-                            .map((entry) => _buildRankCard(entry)),
+                        if (filteredEntries.where((e) => e.rank > 3).isEmpty && filteredEntries.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'END OF CURRENT RANKINGS',
+                              style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white24),
+                            ),
+                          )
+                        else
+                          ...filteredEntries
+                              .where((e) => e.rank > 3)
+                              .map((entry) => _buildRankCard(entry)),
                       ],
                     ),
                   ),
@@ -554,47 +494,133 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   // ─── 16-BIT 3D STAGE SHOWCASE ──────────────────────────────────────────────
   Widget _buildGrandPodium(List<LeaderboardEntry> list) {
-    final top1 = list.isNotEmpty ? list[0] : _fallbackEntries[0];
-    final top2 = list.length > 1 ? list[1] : _fallbackEntries[1];
-    final top3 = list.length > 2 ? list[2] : _fallbackEntries[2];
+    if (list.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E32),
+          border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: Colors.black, offset: Offset(3, 3), blurRadius: 0),
+          ],
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.emoji_events_outlined, color: Color(0xFFF2CA50), size: 36),
+            const SizedBox(height: 10),
+            Text(
+              'AWAITING CHAMPIONS',
+              style: GoogleFonts.pressStart2p(fontSize: 9, color: const Color(0xFFF2CA50)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No players ranked yet. Complete quiz domains to claim your crown!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFD0C5AF), height: 1.6),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final top1 = list.isNotEmpty ? list[0] : null;
+    final top2 = list.length > 1 ? list[1] : null;
+    final top3 = list.length > 2 ? list[2] : null;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Rank 2 (Left)
-        Expanded(child: _buildPodiumStep(top2, height: 100)),
+        Expanded(child: _buildPodiumStep(top2, rankNumber: 2, height: 100, color: const Color(0xFFC0C0C0))),
         const SizedBox(width: 10),
 
         // Rank 1 (Center - Highest)
-        Expanded(child: _buildPodiumStep(top1, height: 125, isGold: true)),
+        Expanded(child: _buildPodiumStep(top1, rankNumber: 1, height: 125, isGold: true, color: const Color(0xFFF2CA50))),
         const SizedBox(width: 10),
 
         // Rank 3 (Right)
-        Expanded(child: _buildPodiumStep(top3, height: 85)),
+        Expanded(child: _buildPodiumStep(top3, rankNumber: 3, height: 85, color: const Color(0xFFCD7F32))),
       ],
     );
   }
 
-  Widget _buildPodiumStep(LeaderboardEntry entry,
-      {required double height, bool isGold = false}) {
+  Widget _buildPodiumStep(
+    LeaderboardEntry? entry, {
+    required int rankNumber,
+    required double height,
+    required Color color,
+    bool isGold = false,
+  }) {
+    if (entry == null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(rankNumber == 1 ? '👑' : rankNumber == 2 ? '🥈' : '🥉',
+              style: TextStyle(fontSize: isGold ? 24 : 18)),
+          const SizedBox(height: 4),
+          Container(
+            width: isGold ? 48 : 38,
+            height: isGold ? 48 : 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF141424),
+              border: Border.all(color: Colors.white24, width: 1.5),
+            ),
+            child: const Center(
+              child: Text('?', style: TextStyle(color: Colors.white24, fontSize: 16)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'VACANT',
+            style: GoogleFonts.pressStart2p(
+              fontSize: 7.5,
+              color: Colors.white38,
+            ),
+          ),
+          Text(
+            '-- XP',
+            style: GoogleFonts.pressStart2p(
+              fontSize: 7,
+              color: Colors.white24,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            height: height,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF141424),
+              border: Border.all(color: Colors.white24, width: 1.5),
+              boxShadow: const [
+                BoxShadow(color: Colors.black, offset: Offset(3, 3), blurRadius: 0),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                '#$rankNumber',
+                style: GoogleFonts.pressStart2p(
+                  fontSize: isGold ? 20 : 14,
+                  color: Colors.white24,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return GestureDetector(
       onTap: () => _inspectPlayer(entry),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Crown / Trophy
           Text(
-            entry.rank == 1
-                ? '👑'
-                : entry.rank == 2
-                    ? '🥈'
-                    : '🥉',
+            entry.rank == 1 ? '👑' : entry.rank == 2 ? '🥈' : '🥉',
             style: TextStyle(fontSize: isGold ? 24 : 18),
           ),
           const SizedBox(height: 4),
-
-          // Avatar Frame
           Container(
             width: isGold ? 48 : 38,
             height: isGold ? 48 : 38,
@@ -613,7 +639,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
           ),
           const SizedBox(height: 4),
-
           Text(
             entry.name.split(' ')[0],
             overflow: TextOverflow.ellipsis,
@@ -630,8 +655,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
           ),
           const SizedBox(height: 4),
-
-          // Pedestal Base
           Container(
             height: height,
             width: double.infinity,
@@ -659,7 +682,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   // ─── CATEGORY FILTER PILLS ──────────────────────────────────────────────────
   Widget _buildCategoryPills() {
-    final categories = ['GLOBAL', 'MATH', 'PHYSICS', 'HISTORY', 'CS', 'GUILDS'];
+    final categories = ['GLOBAL', 'MATH', 'PHYSICS', 'CHEMISTRY', 'BIOLOGY', 'HISTORY', 'CS', 'GUILDS'];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -668,7 +691,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: InkWell(
-              onTap: () => setState(() => _selectedCategory = cat),
+              onTap: () {
+                setState(() => _selectedCategory = cat);
+                _fetchLiveLeaderboard(cat);
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -851,10 +877,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   // ─── STICKY PERSONAL RANK BAR ───────────────────────────────────────────────
   Widget _buildStickyPersonalBar(List<LeaderboardEntry> list) {
     final myIndex = list.indexWhere((e) => _isMe(e));
+    final int myRank = myIndex >= 0 ? myIndex + 1 : list.length + 1;
     final LeaderboardEntry myEntry = myIndex >= 0
         ? list[myIndex]
-        : (list.isNotEmpty ? list.first : _fallbackEntries.first);
-    final int myRank = myIndex >= 0 ? myIndex + 1 : list.length + 1;
+        : LeaderboardEntry(
+            rank: myRank,
+            name: _myPlayerName,
+            title: 'Scholar',
+            level: 1,
+            score: 0,
+            guildTag: 'ARC',
+            streakDays: 1,
+            crownColor: Colors.transparent,
+            avatarInitial: _myPlayerName.isNotEmpty ? _myPlayerName.substring(0, 1) : 'E',
+            avatarColor: const Color(0xFFF2CA50),
+            domainMastery: 'General (0%)',
+          );
     final String rankBadge = myRank <= 3 ? 'TOP 1% 🏆' : myRank <= 10 ? 'TOP 5% ⚔️' : 'SCHOLAR 📜';
 
     return Container(

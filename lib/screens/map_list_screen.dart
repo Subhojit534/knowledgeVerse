@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/theme_music_service.dart';
-import 'subject_dashboard_screen.dart';
+import 'subject_loading_screen.dart';
 import 'world_archipelago_screen.dart';
 
 /// "High Fidelity - World Map List" screen from Stitch.
@@ -18,7 +17,20 @@ class MapListScreen extends StatefulWidget {
 }
 
 class _MapListScreenState extends State<MapListScreen> {
-  Set<String> _unlockedSubjects = {'Mathematics'};
+  final Set<String> _unlockedSubjects = {
+    'Mathematics',
+    'Physics & Space',
+    'Physics',
+    'History & Civics',
+    'History',
+    'Biology & Life',
+    'Biology',
+    'Chemistry',
+    'Computer Science',
+    'Programming',
+    'PvP Duel Arena',
+    'Arena',
+  };
   String _selectedFilter = 'ALL'; // ALL, UNLOCKED, LOCKED
 
   @override
@@ -27,36 +39,6 @@ class _MapListScreenState extends State<MapListScreen> {
     if (ThemeMusicService.musicEnabled) {
       ThemeMusicService.instance.start();
     }
-    _loadUnlockedSubjects();
-  }
-
-  Future<void> _loadUnlockedSubjects() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('selectedSubjects') ?? ['Mathematics'];
-    setState(() {
-      _unlockedSubjects = saved.toSet();
-    });
-  }
-
-  Future<void> _unlockSubject(SubjectIslandData island) async {
-    setState(() {
-      _unlockedSubjects.add(island.subject);
-      _unlockedSubjects.add(island.name);
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('selectedSubjects', _unlockedSubjects.toList());
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${island.name} has been unlocked!',
-          style: GoogleFonts.pressStart2p(fontSize: 10, color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF065F46),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   void _handleIslandTap(SubjectIslandData island, bool isUnlocked) {
@@ -74,106 +56,11 @@ class _MapListScreenState extends State<MapListScreen> {
       return;
     }
 
-    if (isUnlocked) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SubjectDashboardScreen(
-            subjectName: island.name,
-            themeColor: island.themeColor,
-          ),
-        ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) => _buildUnlockDialog(island),
-      );
-    }
-  }
-
-  Widget _buildUnlockDialog(SubjectIslandData island) {
-    return Dialog(
-      backgroundColor: const Color(0xFF1E1E32),
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: Color(0xFFF2CA50), width: 3),
-        borderRadius: BorderRadius.circular(0),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock_open_rounded,
-                color: Color(0xFFF2CA50), size: 40),
-            const SizedBox(height: 12),
-            Text(
-              'UNLOCK ${island.name.toUpperCase()}?',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.spaceMono(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: const Color(0xFFF2CA50),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              island.description,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 11,
-                color: const Color(0xFFD0C5AF),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF28283D),
-                      border: Border.all(
-                          color: const Color(0xFF4D4635), width: 1.5),
-                    ),
-                    child: Text(
-                      'CANCEL',
-                      style: GoogleFonts.pressStart2p(
-                          fontSize: 9, color: Colors.white),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _unlockSubject(island);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF065F46),
-                      border: Border.all(
-                          color: const Color(0xFFF2CA50), width: 2),
-                      boxShadow: const [
-                        BoxShadow(
-                            color: Colors.black, offset: Offset(2, 2)),
-                      ],
-                    ),
-                    child: Text(
-                      'UNLOCK 🚀',
-                      style: GoogleFonts.pressStart2p(
-                          fontSize: 9, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SubjectLoadingScreen(
+          island: island,
         ),
       ),
     );

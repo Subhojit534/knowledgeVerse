@@ -4,7 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Centralized API Configuration service for KnowledgeVerse.
 class ApiConfig {
-  static const String _defaultFallback = 'http://127.0.0.1:8000';
+  static const String _defaultFallback =
+      'https://knowledge-verse-backend-lovat.vercel.app';
   static String? _cachedBaseUrl;
   static bool _initialized = false;
 

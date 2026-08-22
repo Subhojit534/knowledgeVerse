@@ -30,8 +30,13 @@ class BuildingData {
   /// Current accumulated experience points.
   final int currentXp;
 
-  /// Experience points required to level up.
-  final int xpRequired;
+  /// Experience points required to level up (defaults to level * 300).
+  final int? _xpRequired;
+
+  int get xpRequired {
+    final req = _xpRequired;
+    return (req != null && req > 0) ? req : (level * 300);
+  }
 
   /// Number of interactive lessons available inside building.
   final int lessonsAvailable;
@@ -49,13 +54,13 @@ class BuildingData {
     required this.description,
     required this.unlocked,
     this.currentXp = 0,
-    required this.xpRequired,
+    int? xpRequired,
     required this.lessonsAvailable,
     this.themeColor = const Color(0xFF89B4FA),
-  });
+  }) : _xpRequired = xpRequired;
 
   /// Calculates XP progress ratio [0.0 to 1.0].
-  double get progressRatio => (currentXp / xpRequired).clamp(0.0, 1.0);
+  double get progressRatio => xpRequired > 0 ? (currentXp / xpRequired).clamp(0.0, 1.0) : 0.0;
 
   /// Whether building can be upgraded to next level.
   bool get canUpgrade => level < 3 && currentXp >= xpRequired;
