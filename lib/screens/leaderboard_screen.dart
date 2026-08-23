@@ -176,6 +176,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       children: [
                         Text(
                           player.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.pressStart2p(
                             fontSize: 9,
                             color: const Color(0xFFF2CA50),
@@ -184,9 +186,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '${player.title} • [${player.guildTag}]',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.pressStart2p(
                               fontSize: 7, color: const Color(0xFFD0C5AF)),
                         ),
+
                       ],
                     ),
                   ),

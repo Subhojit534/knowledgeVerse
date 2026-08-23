@@ -257,47 +257,51 @@ class _ShopScreenState extends State<ShopScreen> {
       width: 115,
       color: const Color(0xFF141424),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: List.generate(navItems.length, (idx) {
-          final isSelected = _activeNavIndex == idx;
-          final item = navItems[idx];
-          return GestureDetector(
-            onTap: () => setState(() => _activeNavIndex = idx),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF28283D) : Colors.transparent,
-                border: Border.all(
-                  color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF333348),
-                  width: 1.5,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(navItems.length, (idx) {
+            final isSelected = _activeNavIndex == idx;
+            final item = navItems[idx];
+            return GestureDetector(
+              onTap: () => setState(() => _activeNavIndex = idx),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF28283D) : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF333348),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      item['icon'] as IconData,
+                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
+                      size: 20,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item['label'] as String,
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 6.5,
+                        color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    item['icon'] as IconData,
-                    color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
-                    size: 20,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item['label'] as String,
-                    style: GoogleFonts.pressStart2p(
-                      fontSize: 6.5,
-                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8888A0),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
+
 
   // ─── 2. SHOP GRID VIEWPORT ──────────────────────────────────────────────────
   Widget _buildShopGridArea() {

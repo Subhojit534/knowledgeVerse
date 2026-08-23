@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/theme_music_service.dart';
+import 'pvp/pvp_arena_hub_screen.dart';
 import 'subject_loading_screen.dart';
 import 'world_archipelago_screen.dart';
 
@@ -43,18 +44,15 @@ class _MapListScreenState extends State<MapListScreen> {
 
   void _handleIslandTap(SubjectIslandData island, bool isUnlocked) {
     if (island.id == 'arena') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PvP Arena duels opening soon! Train in your academies.',
-            style: GoogleFonts.jetBrainsMono(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF6B13AF),
-          behavior: SnackBarBehavior.floating,
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PvPArenaHubScreen(),
         ),
       );
       return;
     }
+
 
     Navigator.push(
       context,

@@ -3,7 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
+import '../models/pvp_models.dart';
 import '../services/api_service.dart';
+import '../services/pvp_service.dart';
+import 'pvp/pvp_arena_hub_screen.dart';
+import 'pvp/pvp_battle_screen.dart';
+
+
+
 
 class FriendModel {
   final String id;
@@ -115,6 +122,7 @@ class _SocialScreenState extends State<SocialScreen> {
   List<FriendModel> _myAcceptedFriends = [];
   List<PendingFriendRequestModel> _pendingReceivedList = [];
   Set<String> _pendingSentFriendIds = {};
+  List<PvPChallengeItem> _incomingDuelChallenges = [];
 
   // Guild State
   bool _hasGuild = false;
@@ -135,19 +143,27 @@ class _SocialScreenState extends State<SocialScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   Timer? _chatPollTimer;
+  Timer? _duelPollTimer;
   String _myPlayerName = 'Explorer';
   String _myUserId = 'demo-user-123';
+  bool _isAutoJoiningDuel = false;
+  bool _isRespondingToDuel = false;
+  List<PvPChallengeItem> _sentDuelChallenges = [];
+  final Set<String> _consumedChallengeIds = {};
+  final Set<String> _mySentChallengeIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadStateAndProfiles();
     _startChatPollingTimer();
+    _startDuelPollingTimer();
   }
 
   @override
   void dispose() {
     _chatPollTimer?.cancel();
+    _duelPollTimer?.cancel();
     _createGuildNameController.dispose();
     _createGuildTagController.dispose();
     _createGuildMottoController.dispose();
@@ -156,7 +172,202 @@ class _SocialScreenState extends State<SocialScreen> {
     super.dispose();
   }
 
+  void _startDuelPollingTimer() {
+    _duelPollTimer?.cancel();
+    _duelPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_activeRailIndex == 0 && !_isAutoJoiningDuel) {
+        _loadDuelChallenges();
+      }
+    });
+  }
+
+  Future<void> _loadDuelChallenges() async {
+    try {
+      final challenges = await PvPService.getChallenges();
+      if (!mounted) return;
+
+      final received = (challenges['received'] ?? []).where((c) => !_consumedChallengeIds.contains(c.id)).toList();
+      final sent = (challenges['sent'] ?? []).where((c) => !_consumedChallengeIds.contains(c.id)).toList();
+
+      setState(() {
+        _incomingDuelChallenges = received;
+        _sentDuelChallenges = sent;
+      });
+
+      // Check if any sent challenge was ACCEPTED by friend -> AUTOMATICALLY START MATCH!
+      if (!_isAutoJoiningDuel) {
+        final acceptedChallenge = sent.firstWhere(
+          (c) => c.status == 'active' &&
+                 c.sessionId != null &&
+                 c.sessionId!.isNotEmpty &&
+                 !_consumedChallengeIds.contains(c.id) &&
+                 (_mySentChallengeIds.contains(c.id) || _mySentChallengeIds.contains(c.challengedId) || c.challengerId == _myUserId || c.challengerName.toLowerCase() == _myPlayerName.toLowerCase()),
+          orElse: () => PvPChallengeItem(
+            id: '',
+            challengerId: '',
+            challengerName: '',
+            challengedId: '',
+            challengedName: '',
+            subject: '',
+            stakeCoins: 0,
+            status: '',
+            createdAt: '',
+          ),
+        );
+
+        if (acceptedChallenge.id.isNotEmpty && acceptedChallenge.sessionId != null) {
+          _isAutoJoiningDuel = true;
+          _consumedChallengeIds.add(acceptedChallenge.id);
+
+          final session = await PvPService.getSession(acceptedChallenge.sessionId!);
+          if (session != null && mounted) {
+            PvPService.consumeChallenge(challengeId: acceptedChallenge.id, sessionId: session.id);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('⚔️ DUEL ACCEPTED BY ${acceptedChallenge.challengedName?.toUpperCase() ?? "FRIEND"}! STARTING MATCH...',
+                    style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.black)),
+                backgroundColor: const Color(0xFFF2CA50),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => PvPBattleScreen(session: session)),
+            );
+
+            if (mounted) {
+              _isAutoJoiningDuel = false;
+              _loadStateAndProfiles();
+              _loadDuelChallenges();
+            }
+          } else {
+            _isAutoJoiningDuel = false;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+
+  Future<void> _acceptDuelChallenge(PvPChallengeItem challenge) async {
+    if (_isRespondingToDuel) return;
+    setState(() => _isRespondingToDuel = true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('ACCEPTING DUEL... ⚔️', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.black)),
+        backgroundColor: const Color(0xFF82C0A0),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      PvPSession? session = await PvPService.respondToChallenge(
+        challengeId: challenge.id,
+        accept: true,
+        subject: challenge.subject,
+      );
+
+      // Fallback: If session not returned directly, check by challenge session ID
+      if (session == null && challenge.sessionId != null && challenge.sessionId!.isNotEmpty) {
+        session = await PvPService.getSession(challenge.sessionId!);
+      }
+
+      if (session == null) {
+        final freshChallenges = await PvPService.getChallenges();
+        final match = (freshChallenges['received'] ?? []).firstWhere(
+          (c) => c.id == challenge.id,
+          orElse: () => challenge,
+        );
+        if (match.sessionId != null && match.sessionId!.isNotEmpty) {
+          session = await PvPService.getSession(match.sessionId!);
+        }
+      }
+
+      if (session != null && mounted) {
+        _isAutoJoiningDuel = true;
+        _consumedChallengeIds.add(challenge.id);
+        PvPService.consumeChallenge(challengeId: challenge.id, sessionId: session.id);
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PvPBattleScreen(session: session!),
+          ),
+        );
+        if (mounted) {
+          _isAutoJoiningDuel = false;
+          _loadStateAndProfiles();
+          _loadDuelChallenges();
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('COULD NOT CONNECT TO DUEL. Try again.', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white)),
+            backgroundColor: const Color(0xFFFF6B6B),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRespondingToDuel = false);
+    }
+  }
+
+  Future<void> _declineDuelChallenge(PvPChallengeItem challenge) async {
+    _consumedChallengeIds.add(challenge.id);
+    await PvPService.respondToChallenge(
+      challengeId: challenge.id,
+      accept: false,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('DUEL DECLINED', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white)),
+          backgroundColor: const Color(0xFF28283D),
+        ),
+      );
+      _loadDuelChallenges();
+    }
+  }
+
+
+  Future<void> _joinActiveDuel(PvPChallengeItem challenge) async {
+
+    if (challenge.sessionId == null || challenge.sessionId!.isEmpty) return;
+    _consumedChallengeIds.add(challenge.id);
+    PvPService.consumeChallenge(challengeId: challenge.id, sessionId: challenge.sessionId);
+
+    final session = await PvPService.getSession(challenge.sessionId!);
+    if (session != null && mounted) {
+      _isAutoJoiningDuel = true;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PvPBattleScreen(session: session)),
+      );
+      if (mounted) {
+        _isAutoJoiningDuel = false;
+        _loadStateAndProfiles();
+        _loadDuelChallenges();
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('SESSION HAS EXPIRED', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white)),
+          backgroundColor: const Color(0xFFFF6B6B),
+        ),
+      );
+    }
+  }
+
   void _startChatPollingTimer() {
+
+
     _chatPollTimer?.cancel();
     _chatPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (!mounted) {
@@ -169,6 +380,7 @@ class _SocialScreenState extends State<SocialScreen> {
       }
     });
   }
+
 
   Future<void> _pollGuildMessages() async {
     if (!_hasGuild || _myGuildId.isEmpty) return;
@@ -356,10 +568,12 @@ class _SocialScreenState extends State<SocialScreen> {
           _loadGuildData(),
         ]);
       }
+      await _loadDuelChallenges();
     } catch (e) {
       debugPrint('❌ [SocialScreen Load Error]: $e');
     }
   }
+
 
   Future<void> _loadFriendsDataFallback() async {
     try {
@@ -729,13 +943,24 @@ class _SocialScreenState extends State<SocialScreen> {
 
     if (confirmed == true) {
       try {
-        await ApiService.post('/api/social/duel/challenge', body: {
+        _mySentChallengeIds.add(friend.id);
+
+        final res = await ApiService.post('/api/pvp/challenge', body: {
           'challengerId': _myUserId,
           'challengedId': friend.id,
-          'buildingId': 'code',
-          'subject': friend.district,
+          'challengerName': _myPlayerName,
+          'challengedName': friend.name,
+          'subject': friend.district.isNotEmpty ? friend.district : 'Mathematics',
           'stakeCoins': 50,
         });
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          final duelObj = data['duel'] as Map<String, dynamic>?;
+          if (duelObj != null && duelObj['id'] != null) {
+            _mySentChallengeIds.add(duelObj['id'].toString());
+          }
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -743,13 +968,25 @@ class _SocialScreenState extends State<SocialScreen> {
               content: Text('DUEL CHALLENGE SENT TO ${friend.name.toUpperCase()}!',
                   style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
               backgroundColor: const Color(0xFF1E1E32),
+              action: SnackBarAction(
+                label: 'ARENA',
+                textColor: const Color(0xFFF2CA50),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PvPArenaHubScreen()),
+                  );
+                },
+              ),
             ),
           );
+          _loadDuelChallenges();
         }
       } catch (e) {
         debugPrint('❌ [Duel Challenge Error]: $e');
       }
     }
+
   }
 
   @override
@@ -851,50 +1088,54 @@ class _SocialScreenState extends State<SocialScreen> {
       width: 115,
       color: const Color(0xFF141424),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: List.generate(navItems.length, (idx) {
-          final isSelected = _activeRailIndex == idx;
-          final item = navItems[idx];
-          return GestureDetector(
-            onTap: () {
-              setState(() => _activeRailIndex = idx);
-              if (idx == 1) {
-                _loadGuildData();
-              }
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF28283D) : const Color(0xFF1B1B2C),
-                border: Border.all(
-                  color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF3C382A),
-                  width: 2,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(navItems.length, (idx) {
+            final isSelected = _activeRailIndex == idx;
+            final item = navItems[idx];
+            return GestureDetector(
+              onTap: () {
+                setState(() => _activeRailIndex = idx);
+                if (idx == 1) {
+                  _loadGuildData();
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF28283D) : const Color(0xFF1B1B2C),
+                  border: Border.all(
+                    color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF3C382A),
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(item['icon'] as IconData,
+                        color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A), size: 20),
+                    const SizedBox(height: 6),
+                    Text(
+                      item['label'] as String,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 7.5,
+                        color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(item['icon'] as IconData,
-                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A), size: 20),
-                  const SizedBox(height: 6),
-                  Text(
-                    item['label'] as String,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.pressStart2p(
-                      fontSize: 7.5,
-                      color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF8C867A),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
+
 
   Widget _buildMasterPanel() {
     return Container(
@@ -921,7 +1162,7 @@ class _SocialScreenState extends State<SocialScreen> {
   Widget _buildMasterContent() {
     if (_activeRailIndex == 0) {
       // FRIENDS TAB
-      if (_pendingReceivedList.isEmpty && _myAcceptedFriends.isEmpty) {
+      if (_incomingDuelChallenges.isEmpty && _pendingReceivedList.isEmpty && _myAcceptedFriends.isEmpty) {
         return Container(
           padding: const EdgeInsets.all(16),
           color: const Color(0xFF1E1E32),
@@ -944,7 +1185,173 @@ class _SocialScreenState extends State<SocialScreen> {
 
       return ListView(
         children: [
-          // Pending Received Section
+          // Incoming Duel Challenges Section (PROMINENT & ACTIONABLE)
+          if (_incomingDuelChallenges.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2CA50).withOpacity(0.15),
+                border: Border.all(color: const Color(0xFFF2CA50)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.flash_on, color: Color(0xFFF2CA50), size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'INCOMING DUEL CHALLENGES (${_incomingDuelChallenges.length})',
+                    style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFFF2CA50)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            ..._incomingDuelChallenges.map((duel) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF28283D),
+                  border: Border.all(color: const Color(0xFFF2CA50), width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black45, offset: Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.sports_esports, color: Color(0xFFF2CA50), size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            duel.challengerName.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${duel.subject} • ${duel.stakeCoins} 🪙 Stake',
+                      style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: const Color(0xFFF2CA50)),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF82C0A0),
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () => _acceptDuelChallenge(duel),
+                            child: Text('ACCEPT DUEL ⚔️', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF6B6B),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                          onPressed: () => _declineDuelChallenge(duel),
+                          child: Text('DECLINE', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+          ],
+
+          // Outgoing / Sent Duel Challenges Section
+          if (_sentDuelChallenges.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF70D6FF).withOpacity(0.15),
+                border: Border.all(color: const Color(0xFF70D6FF)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.outbox, color: Color(0xFF70D6FF), size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'OUTGOING DUELS (${_sentDuelChallenges.length})',
+                    style: GoogleFonts.pressStart2p(fontSize: 7.5, color: const Color(0xFF70D6FF)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            ..._sentDuelChallenges.map((duel) {
+              final bool isAccepted = duel.status == 'active' && duel.sessionId != null && duel.sessionId!.isNotEmpty;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E32),
+                  border: Border.all(color: isAccepted ? const Color(0xFF82C0A0) : const Color(0xFF4D4635), width: isAccepted ? 2 : 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(isAccepted ? Icons.play_circle_fill : Icons.hourglass_top,
+                            color: isAccepted ? const Color(0xFF82C0A0) : const Color(0xFF70D6FF), size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'TO: ${duel.challengedName?.toUpperCase() ?? "FRIEND"}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+                          ),
+
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isAccepted
+                          ? '⚔️ DUEL ACCEPTED! MATCH IS READY!'
+                          : '${duel.subject} • ${duel.stakeCoins} 🪙 • WAITING...',
+                      style: GoogleFonts.jetBrainsMono(
+                          fontSize: 9.5, color: isAccepted ? const Color(0xFF82C0A0) : const Color(0xFF70D6FF)),
+                    ),
+                    if (isAccepted) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF82C0A0),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                          ),
+                          onPressed: () => _joinActiveDuel(duel),
+                          child: Text('JOIN BATTLE NOW! ⚔️', style: GoogleFonts.pressStart2p(fontSize: 7.5)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+          ],
+
           if (_pendingReceivedList.isNotEmpty) ...[
             Text('PENDING REQUESTS (${_pendingReceivedList.length})',
                 style: GoogleFonts.pressStart2p(fontSize: 7, color: const Color(0xFFFFB4AB))),
@@ -985,6 +1392,7 @@ class _SocialScreenState extends State<SocialScreen> {
             }),
             const SizedBox(height: 12),
           ],
+
 
           // Accepted Friends Section
           if (_myAcceptedFriends.isNotEmpty) ...[
@@ -1506,15 +1914,53 @@ class _SocialScreenState extends State<SocialScreen> {
                         ],
                       ),
                     ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF2CA50),
-                        foregroundColor: Colors.black,
-                      ),
-                      icon: const Icon(Icons.sports_esports_rounded, color: Colors.black, size: 14),
-                      label: Text('DUEL', style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.black)),
-                      onPressed: () => _challengeFriend(selected),
+                    Builder(
+                      builder: (context) {
+                        final incoming = _incomingDuelChallenges.where(
+                          (d) => d.challengerId == selected.id || d.challengerName.toLowerCase() == selected.name.toLowerCase(),
+                        ).toList();
+
+                        if (incoming.isNotEmpty) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF82C0A0),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                ),
+                                icon: const Icon(Icons.flash_on, color: Colors.black, size: 13),
+                                label: Text('ACCEPT ⚔️', style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.black)),
+                                onPressed: () => _acceptDuelChallenge(incoming.first),
+                              ),
+                              const SizedBox(width: 4),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF6B6B),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                ),
+                                onPressed: () => _declineDuelChallenge(incoming.first),
+                                child: Text('DECLINE', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF2CA50),
+                            foregroundColor: Colors.black,
+                          ),
+                          icon: const Icon(Icons.sports_esports_rounded, color: Colors.black, size: 14),
+                          label: Text('DUEL', style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.black)),
+                          onPressed: () => _challengeFriend(selected),
+                        );
+                      },
                     ),
+
+
                   ],
                 ),
               ),

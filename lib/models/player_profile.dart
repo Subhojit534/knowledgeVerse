@@ -456,21 +456,39 @@ class PlayerProfile {
     }
 
     if (profile == null) {
-      final savedName = prefs.getString(playerNameKey)?.trim();
-      if (savedName != null && savedName.isNotEmpty) {
-        final savedId = prefs.getString(userIdKey)?.trim() ?? '';
-        profile = PlayerProfile(
-          id: savedId,
-          name: savedName,
-        );
-        profile = profile.withDailyStreak().withEnergyRegeneration();
+      var savedId = prefs.getString(userIdKey)?.trim();
+      var savedName = prefs.getString(playerNameKey)?.trim();
+      if (savedId == null || savedId.isEmpty) {
+        final randCode = math.Random().nextInt(9000) + 1000;
+        savedId = 'duelist_${DateTime.now().millisecondsSinceEpoch % 100000}_$randCode';
+        await prefs.setString(userIdKey, savedId);
       }
+      if (savedName == null || savedName.isEmpty) {
+        final randNum = savedId.split('_').last;
+        savedName = 'Duelist_$randNum';
+        await prefs.setString(playerNameKey, savedName);
+      }
+      profile = PlayerProfile(
+        id: savedId,
+        name: savedName,
+      );
+      profile = profile.withDailyStreak().withEnergyRegeneration();
+      await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
+    } else if (profile.id.isEmpty) {
+      var savedId = prefs.getString(userIdKey)?.trim();
+      if (savedId == null || savedId.isEmpty) {
+        final randCode = math.Random().nextInt(9000) + 1000;
+        savedId = 'duelist_${DateTime.now().millisecondsSinceEpoch % 100000}_$randCode';
+        await prefs.setString(userIdKey, savedId);
+      }
+      profile = profile.copyWith(id: savedId);
+      await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
     }
 
     if (profile != null) {
       current = profile;
       notifier.update(profile);
-      debugPrint('📂 [PlayerProfile Loaded]: Name: "${profile.name}", Level: ${profile.level}, Coins: ${profile.coins}, Energy: ${profile.energy}');
+      debugPrint('📂 [PlayerProfile Loaded]: ID: "${profile.id}", Name: "${profile.name}", Level: ${profile.level}, Coins: ${profile.coins}');
 
       // Ensure live energy regeneration timer is active
       startEnergyRegenLoop();
@@ -482,6 +500,7 @@ class PlayerProfile {
 
     return null;
   }
+
 
   static void _fetchServerProfile(PlayerProfile localProfile) {
     final targetId = localProfile.id.isNotEmpty ? localProfile.id : localProfile.name;

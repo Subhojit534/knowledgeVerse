@@ -6,7 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/player_profile.dart';
 import '../services/theme_music_service.dart';
+import 'pvp/pvp_arena_hub_screen.dart';
 import 'subject_loading_screen.dart';
+
 
 /// Data model representing an interactive academy island in the archipelago.
 class SubjectIslandData {
@@ -227,18 +229,15 @@ class _WorldArchipelagoScreenState extends State<WorldArchipelagoScreen>
 
   void _onIslandTap(SubjectIslandData island) {
     if (island.id == 'arena') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PvP Arena matchmaking is opening soon! Complete lessons to train.',
-            style: GoogleFonts.jetBrainsMono(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF6B13AF),
-          duration: const Duration(seconds: 2),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PvPArenaHubScreen(),
         ),
       );
       return;
     }
+
 
     final isUnlocked = _unlockedSubjects.contains(island.name) ||
         _unlockedSubjects.contains(island.subject);
