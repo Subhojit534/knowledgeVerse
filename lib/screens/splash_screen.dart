@@ -2,10 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../models/player_profile.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
-import 'world_archipelago_screen.dart';
 
 /// "High Fidelity Splash / Welcome Screen"
 ///
@@ -53,31 +51,16 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  void _continueExisting() async {
-    final savedProfile = await PlayerProfile.load();
-    if (!mounted) return;
-    if (savedProfile != null && savedProfile.name.trim().isNotEmpty) {
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) =>
-              WorldArchipelagoScreen(profile: savedProfile),
-          transitionsBuilder: (_, anim, __, child) =>
-              FadeTransition(opacity: anim, child: child),
-          transitionDuration: const Duration(milliseconds: 600),
-        ),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const LoginScreen(),
-          transitionsBuilder: (_, anim, __, child) =>
-              FadeTransition(opacity: anim, child: child),
-          transitionDuration: const Duration(milliseconds: 600),
-        ),
-      );
-    }
+  void _continueExisting() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const LoginScreen(),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   @override

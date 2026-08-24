@@ -9,7 +9,7 @@ import '../services/api_service.dart';
 class PlayerProfileNotifier extends ValueNotifier<PlayerProfile?> {
   PlayerProfileNotifier(super.value);
 
-  void update(PlayerProfile p) {
+  void update(PlayerProfile? p) {
     value = p;
     PlayerProfile.current = p;
     notifyListeners();
@@ -444,6 +444,7 @@ class PlayerProfile {
   static Future<PlayerProfile?> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsKey);
+    final bool hasOnboarded = prefs.getBool(onboardedKey) ?? false;
     PlayerProfile? profile;
 
     if (raw != null && raw.isNotEmpty) {
@@ -455,37 +456,19 @@ class PlayerProfile {
       }
     }
 
-    if (profile == null) {
-      var savedId = prefs.getString(userIdKey)?.trim();
-      var savedName = prefs.getString(playerNameKey)?.trim();
-      if (savedId == null || savedId.isEmpty) {
-        final randCode = math.Random().nextInt(9000) + 1000;
-        savedId = 'duelist_${DateTime.now().millisecondsSinceEpoch % 100000}_$randCode';
-        await prefs.setString(userIdKey, savedId);
+    // Only restore active session if user has a genuine profile (has onboarded or logged in with real name)
+    if (profile != null && (hasOnboarded || (profile.name.trim().isNotEmpty && !profile.name.startsWith('Duelist_')))) {
+      if (profile.id.isEmpty) {
+        var savedId = prefs.getString(userIdKey)?.trim();
+        if (savedId == null || savedId.isEmpty) {
+          final randCode = math.Random().nextInt(9000) + 1000;
+          savedId = 'duelist_${DateTime.now().millisecondsSinceEpoch % 100000}_$randCode';
+          await prefs.setString(userIdKey, savedId);
+        }
+        profile = profile.copyWith(id: savedId);
+        await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
       }
-      if (savedName == null || savedName.isEmpty) {
-        final randNum = savedId.split('_').last;
-        savedName = 'Duelist_$randNum';
-        await prefs.setString(playerNameKey, savedName);
-      }
-      profile = PlayerProfile(
-        id: savedId,
-        name: savedName,
-      );
-      profile = profile.withDailyStreak().withEnergyRegeneration();
-      await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
-    } else if (profile.id.isEmpty) {
-      var savedId = prefs.getString(userIdKey)?.trim();
-      if (savedId == null || savedId.isEmpty) {
-        final randCode = math.Random().nextInt(9000) + 1000;
-        savedId = 'duelist_${DateTime.now().millisecondsSinceEpoch % 100000}_$randCode';
-        await prefs.setString(userIdKey, savedId);
-      }
-      profile = profile.copyWith(id: savedId);
-      await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
-    }
 
-    if (profile != null) {
       current = profile;
       notifier.update(profile);
       debugPrint('📂 [PlayerProfile Loaded]: ID: "${profile.id}", Name: "${profile.name}", Level: ${profile.level}, Coins: ${profile.coins}');
@@ -499,6 +482,19 @@ class PlayerProfile {
     }
 
     return null;
+  }
+
+  /// Clears stored player profile and session
+  static Future<void> logout() async {
+    current = null;
+    notifier.update(null);
+    _energyRegenTimer?.cancel();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+    await prefs.remove(playerNameKey);
+    await prefs.remove(userIdKey);
+    await prefs.remove(subjectsKey);
+    await prefs.setBool(onboardedKey, false);
   }
 
 

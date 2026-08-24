@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../models/player_profile.dart';
 import '../services/theme_music_service.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
+import 'splash_screen.dart';
 
 /// 16-Bit RPG System Options Screen.
 /// Features chiseled obsidian option tablets, retro pixel toggles,
@@ -226,23 +226,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                   GestureDetector(
-                                    onTap: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Save data reset.'),
-                                          backgroundColor: Color(0xFF93000A),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
+                                    onTap: () async {
+                                      await PlayerProfile.logout();
+                                      if (!context.mounted) return;
+                                      Navigator.pushAndRemoveUntil(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const SplashScreen()),
+                                        (route) => false,
                                       );
                                     },
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF93000A),
+                                        color: const Color(0xFF501414),
                                         border: Border.all(
-                                            color: const Color(0xFFFFB4AB),
+                                            color: const Color(0xFFFF6B6B),
                                             width: 2),
                                         boxShadow: const [
                                           BoxShadow(
@@ -264,12 +263,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   const SizedBox(height: 12),
                                   GestureDetector(
                                     onTap: () async {
-                                      final prefs = await SharedPreferences.getInstance();
-                                      await prefs.clear();
+                                      await PlayerProfile.logout();
                                       if (!context.mounted) return;
                                       Navigator.pushAndRemoveUntil(
                                         context,
-                                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                        MaterialPageRoute(builder: (_) => const SplashScreen()),
                                         (route) => false,
                                       );
                                     },

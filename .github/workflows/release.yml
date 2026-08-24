@@ -48,7 +48,8 @@ jobs:
       - name: Rename APK for release
         run: |
           TAG_NAME="${GITHUB_REF_NAME:-v1.0.0}"
-          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/KnowledgeVerse-$TAG_NAME.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/KnowledgeVerse-$TAG_NAME.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/KnowledgeVerse.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2

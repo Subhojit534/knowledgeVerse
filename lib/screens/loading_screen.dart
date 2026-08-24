@@ -42,7 +42,8 @@ class _LoadingScreenState extends State<LoadingScreen>
       // Auto-login: check if user has a saved session
       final savedProfile = await PlayerProfile.load();
       final hasSession = savedProfile != null &&
-          savedProfile.name.trim().isNotEmpty;
+          savedProfile.name.trim().isNotEmpty &&
+          !savedProfile.name.startsWith('Duelist_');
 
       if (!mounted) return;
       Navigator.pushReplacement(
