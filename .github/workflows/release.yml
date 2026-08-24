@@ -1,0 +1,61 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags (e.g. v1.1.0, v1.2.0)
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Create .env from template
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            echo "API_BASE_URL=https://knowledge-verse-backend-lovat.vercel.app" > .env
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Rename APK for release
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME:-v1.0.0}"
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/KnowledgeVerse-$TAG_NAME.apk
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/KnowledgeVerse-*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
