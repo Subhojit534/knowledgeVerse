@@ -1514,7 +1514,7 @@ class _SocialScreenState extends State<SocialScreen> {
                             style: GoogleFonts.pressStart2p(fontSize: 8, color: const Color(0xFFF2CA50))),
                         const SizedBox(height: 6),
                         Text(
-                          'Type a user\'s name above to search for them in Hexafalls and send a friend request!',
+                          'Type a user\'s name above to search for them in KnowledgeVerse and send a friend request!',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white70, height: 1.5),
                         ),

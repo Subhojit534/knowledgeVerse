@@ -507,7 +507,7 @@ class _PvPBattleScreenState extends State<PvPBattleScreen>
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  'Hexafalls KnowledgeVerse PvP Arena',
+                  'KnowledgeVerse PvP Arena',
                   style: GoogleFonts.pressStart2p(fontSize: 6.5, color: Colors.white24),
                 ),
               ),

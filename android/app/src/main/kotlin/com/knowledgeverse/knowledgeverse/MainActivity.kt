@@ -1,4 +1,4 @@
-package com.hexafalls.hexafalls
+package com.knowledgeverse.knowledgeverse
 
 import io.flutter.embedding.android.FlutterActivity
 

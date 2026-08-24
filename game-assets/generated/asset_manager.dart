@@ -1,4 +1,4 @@
-// Generated asset constants for Hexafalls game-assets.
+// Generated asset constants for KnowledgeVerse game-assets.
 // This file is an asset-pipeline artifact and is not wired into gameplay.
 abstract final class AssetManager {
   static const String buildingsAlchemyLab =

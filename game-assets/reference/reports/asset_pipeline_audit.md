@@ -1,4 +1,4 @@
-# Hexafalls Asset Pipeline Audit
+# KnowledgeVerse Asset Pipeline Audit
 Scope: every PNG currently inside `game-assets/`. Gameplay and Flutter source code were not modified.
 ## Outputs
 - `game-assets/assets_manifest.json` and root `assets_manifest.json`: complete structured manifest.

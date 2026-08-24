@@ -1,6 +1,6 @@
-# Hexafalls Asset Duplicate Report
+# KnowledgeVerse Asset Duplicate Report
 
-Scope: `/home/phantom/Documents/hexafalls/assets` and `/home/phantom/Documents/hexafalls/game-assets`.
+Scope: `/home/phantom/Documents/knowledgeverse/assets` and `/home/phantom/Documents/knowledgeverse/game-assets`.
 
 No files were deleted, moved, or archived.
 

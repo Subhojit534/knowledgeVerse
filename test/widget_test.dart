@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hexafalls/main.dart';
+import 'package:knowledgeverse/main.dart';
 
 void main() {
   testWidgets('KnowledgeVerseApp mounts successfully', (WidgetTester tester) async {

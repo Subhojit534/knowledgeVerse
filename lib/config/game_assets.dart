@@ -1,4 +1,4 @@
-// Generated asset path constants for the Hexafalls game asset library.
+// Generated asset path constants for the KnowledgeVerse game asset library.
 // Do not hardcode asset path strings elsewhere; reference these constants instead.
 
 abstract final class AssetManager {

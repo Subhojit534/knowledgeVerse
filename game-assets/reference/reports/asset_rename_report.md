@@ -1,4 +1,4 @@
-# Hexafalls Game Asset Rename Report
+# KnowledgeVerse Game Asset Rename Report
 
 Scope: PNG files under `game-assets` only. No game source files were modified, no files were deleted, and PNG pixel data was not recompressed or rewritten; files were renamed only.
 

@@ -87,5 +87,5 @@ class AcademyGame extends FlameGame with HasCollisionDetection {
   }
 }
 
-/// Backward compatibility typedef alias for [AcademyGame].
-typedef HexaFallsGame = AcademyGame;
+/// Typedef alias for [AcademyGame].
+typedef KnowledgeVerseGame = AcademyGame;

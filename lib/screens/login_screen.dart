@@ -7,7 +7,7 @@ import '../services/api_service.dart';
 import 'splash_screen.dart';
 import 'world_archipelago_screen.dart';
 
-/// 16-Bit RPG Login Screen for existing Hexafalls Explorers.
+/// 16-Bit RPG Login Screen for existing KnowledgeVerse Explorers.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -113,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Enter your credentials to re-enter Hexafalls',
+                            'Enter your credentials to re-enter KnowledgeVerse',
                             style: GoogleFonts.pressStart2p(
                               fontSize: 7,
                               color: const Color(0xFFD0C5AF),

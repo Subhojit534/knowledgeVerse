@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.hexafalls" "\0"
-            VALUE "FileDescription", "hexafalls" "\0"
+            VALUE "CompanyName", "com.knowledgeverse" "\0"
+            VALUE "FileDescription", "knowledgeverse" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "hexafalls" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.hexafalls. All rights reserved." "\0"
-            VALUE "OriginalFilename", "hexafalls.exe" "\0"
-            VALUE "ProductName", "hexafalls" "\0"
+            VALUE "InternalName", "knowledgeverse" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.knowledgeverse. All rights reserved." "\0"
+            VALUE "OriginalFilename", "knowledgeverse.exe" "\0"
+            VALUE "ProductName", "knowledgeverse" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
