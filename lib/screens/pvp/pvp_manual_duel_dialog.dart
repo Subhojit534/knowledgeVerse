@@ -85,10 +85,17 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
       final challenges = results[1] as Map<String, List<PvPChallengeItem>>;
 
       if (response.statusCode == 200) {
-        final data = response.body.isNotEmpty ? (response.body.startsWith('{') ? (jsonDecode(response.body) as Map<String, dynamic>) : {}) : {};
+        final data = response.body.isNotEmpty
+            ? (response.body.startsWith('{')
+                  ? (jsonDecode(response.body) as Map<String, dynamic>)
+                  : {})
+            : {};
         if (mounted) {
           setState(() {
-            _friends = (data['friends'] as List<dynamic>?) ?? (data['availableExplorers'] as List<dynamic>?) ?? [];
+            _friends =
+                (data['friends'] as List<dynamic>?) ??
+                (data['availableExplorers'] as List<dynamic>?) ??
+                [];
             _incomingChallenges = challenges['received'] ?? [];
             _isLoadingFriends = false;
           });
@@ -102,7 +109,9 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
     }
   }
 
-  Future<void> _handleAcceptIncomingChallenge(PvPChallengeItem challenge) async {
+  Future<void> _handleAcceptIncomingChallenge(
+    PvPChallengeItem challenge,
+  ) async {
     final session = await PvPService.respondToChallenge(
       challengeId: challenge.id,
       accept: true,
@@ -110,21 +119,29 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
     );
 
     if (session != null && mounted) {
-      PvPService.consumeChallenge(challengeId: challenge.id, sessionId: session.id);
+      PvPService.consumeChallenge(
+        challengeId: challenge.id,
+        sessionId: session.id,
+      );
       Navigator.pop(context, session);
     } else {
       // Try fetching active session
       if (challenge.sessionId != null) {
         final existing = await PvPService.getSession(challenge.sessionId!);
         if (existing != null && mounted) {
-          PvPService.consumeChallenge(challengeId: challenge.id, sessionId: existing.id);
+          PvPService.consumeChallenge(
+            challengeId: challenge.id,
+            sessionId: existing.id,
+          );
           Navigator.pop(context, existing);
         }
       }
     }
   }
 
-  Future<void> _handleDeclineIncomingChallenge(PvPChallengeItem challenge) async {
+  Future<void> _handleDeclineIncomingChallenge(
+    PvPChallengeItem challenge,
+  ) async {
     PvPService.consumeChallenge(challengeId: challenge.id);
     await PvPService.respondToChallenge(
       challengeId: challenge.id,
@@ -137,16 +154,16 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
     }
   }
 
-
-
-
   // ─── ROOM HOST FLOW ────────────────────────────────────────────────────────
   Future<void> _handleCreateRoom() async {
     final profile = PlayerProfile.current ?? const PlayerProfile();
     if (profile.coins < _selectedStake) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('INSUFFICIENT COINS! Need $_selectedStake 🪙', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+          content: Text(
+            'INSUFFICIENT COINS! Need $_selectedStake 🪙',
+            style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+          ),
           backgroundColor: _crimson,
         ),
       );
@@ -177,7 +194,10 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
       setState(() => _isCreatingRoom = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('FAILED TO CREATE ROOM! Check network.', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+          content: Text(
+            'FAILED TO CREATE ROOM! Check network.',
+            style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+          ),
           backgroundColor: _crimson,
         ),
       );
@@ -186,7 +206,9 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
 
   void _startHostPolling(String code) {
     _roomHostPollTimer?.cancel();
-    _roomHostPollTimer = Timer.periodic(const Duration(milliseconds: 700), (_) async {
+    _roomHostPollTimer = Timer.periodic(const Duration(milliseconds: 800), (
+      _,
+    ) async {
       final statusData = await PvPService.getRoomStatus(code);
       if (!mounted) return;
 
@@ -219,7 +241,10 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
     if (result['success'] == true && result['session'] != null) {
       Navigator.pop(context, result['session'] as PvPSession);
     } else {
-      setState(() => _joinError = result['error']?.toString() ?? 'INVALID OR EXPIRED CODE');
+      setState(
+        () => _joinError =
+            result['error']?.toString() ?? 'INVALID OR EXPIRED CODE',
+      );
     }
   }
 
@@ -271,14 +296,21 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                     const SizedBox(width: 8),
                     Text(
                       'CUSTOM DUEL',
-                      style: GoogleFonts.pressStart2p(fontSize: 12, color: _gold),
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 12,
+                        color: _gold,
+                      ),
                     ),
                   ],
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
                   onPressed: () {
                     if (_createdRoomCode != null) {
                       PvPService.cancelRoom(_createdRoomCode!);
@@ -302,14 +334,18 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                       decoration: BoxDecoration(
                         color: _selectedTab == 0 ? _gold : _bgPanel,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _selectedTab == 0 ? _gold : _borderDim),
+                        border: Border.all(
+                          color: _selectedTab == 0 ? _gold : _borderDim,
+                        ),
                       ),
                       child: Center(
                         child: Text(
                           '🔑 ROOM CODE',
                           style: GoogleFonts.pressStart2p(
                             fontSize: 7.5,
-                            color: _selectedTab == 0 ? Colors.black : Colors.white70,
+                            color: _selectedTab == 0
+                                ? Colors.black
+                                : Colors.white70,
                           ),
                         ),
                       ),
@@ -325,14 +361,18 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                       decoration: BoxDecoration(
                         color: _selectedTab == 1 ? _cyan : _bgPanel,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _selectedTab == 1 ? _cyan : _borderDim),
+                        border: Border.all(
+                          color: _selectedTab == 1 ? _cyan : _borderDim,
+                        ),
                       ),
                       child: Center(
                         child: Text(
                           '👥 DUEL FRIEND',
                           style: GoogleFonts.pressStart2p(
                             fontSize: 7.5,
-                            color: _selectedTab == 1 ? Colors.black : Colors.white70,
+                            color: _selectedTab == 1
+                                ? Colors.black
+                                : Colors.white70,
                           ),
                         ),
                       ),
@@ -374,7 +414,9 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                   decoration: BoxDecoration(
                     color: _roomSubTab == 0 ? _bgCard : _bgDark,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _roomSubTab == 0 ? _gold : _borderDim),
+                    border: Border.all(
+                      color: _roomSubTab == 0 ? _gold : _borderDim,
+                    ),
                   ),
                   child: Center(
                     child: Text(
@@ -400,7 +442,9 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                   decoration: BoxDecoration(
                     color: _roomSubTab == 1 ? _bgCard : _bgDark,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _roomSubTab == 1 ? _cyan : _borderDim),
+                    border: Border.all(
+                      color: _roomSubTab == 1 ? _cyan : _borderDim,
+                    ),
                   ),
                   child: Center(
                     child: Text(
@@ -420,7 +464,9 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
         const SizedBox(height: 12),
 
         Expanded(
-          child: _roomSubTab == 0 ? _buildCreateRoomView() : _buildJoinRoomView(),
+          child: _roomSubTab == 0
+              ? _buildCreateRoomView()
+              : _buildJoinRoomView(),
         ),
       ],
     );
@@ -464,7 +510,13 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                       Clipboard.setData(ClipboardData(text: _createdRoomCode!));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('ROOM CODE COPIED!', style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+                          content: Text(
+                            'ROOM CODE COPIED!',
+                            style: GoogleFonts.pressStart2p(
+                              fontSize: 8,
+                              color: Colors.white,
+                            ),
+                          ),
                           backgroundColor: _green,
                           duration: const Duration(seconds: 1),
                         ),
@@ -481,12 +533,18 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                 const SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: _gold),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _gold,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Waiting for friend to join...',
-                  style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70),
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11,
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -523,7 +581,13 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('DUEL SUBJECT:', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white70)),
+            Text(
+              'DUEL SUBJECT:',
+              style: GoogleFonts.pressStart2p(
+                fontSize: 7.5,
+                color: Colors.white70,
+              ),
+            ),
             const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -541,14 +605,23 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                       _selectedSubject,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.pressStart2p(fontSize: 8.5, color: Colors.white),
+                      style: GoogleFonts.pressStart2p(
+                        fontSize: 8.5,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            Text('ENTRY STAKE:', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white70)),
+            Text(
+              'ENTRY STAKE:',
+              style: GoogleFonts.pressStart2p(
+                fontSize: 7.5,
+                color: Colors.white70,
+              ),
+            ),
             const SizedBox(height: 6),
             Row(
               children: [50, 100, 250].map((stake) {
@@ -586,12 +659,24 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                 backgroundColor: _gold,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: _isCreatingRoom ? null : _handleCreateRoom,
               child: _isCreatingRoom
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : Text('GENERATE ROOM CODE 🔑', style: GoogleFonts.pressStart2p(fontSize: 8)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : Text(
+                      'GENERATE ROOM CODE 🔑',
+                      style: GoogleFonts.pressStart2p(fontSize: 8),
+                    ),
             ),
           ],
         ),
@@ -612,16 +697,29 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('ENTER 6-DIGIT ROOM CODE:', style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white70)),
+            Text(
+              'ENTER 6-DIGIT ROOM CODE:',
+              style: GoogleFonts.pressStart2p(
+                fontSize: 7.5,
+                color: Colors.white70,
+              ),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: _joinCodeController,
-              style: GoogleFonts.pressStart2p(fontSize: 16, color: _cyan, letterSpacing: 3),
+              style: GoogleFonts.pressStart2p(
+                fontSize: 16,
+                color: _cyan,
+                letterSpacing: 3,
+              ),
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 hintText: '849201',
-                hintStyle: GoogleFonts.pressStart2p(fontSize: 14, color: Colors.white24),
+                hintStyle: GoogleFonts.pressStart2p(
+                  fontSize: 14,
+                  color: Colors.white24,
+                ),
                 filled: true,
                 fillColor: _bgDark,
                 border: OutlineInputBorder(
@@ -647,19 +745,30 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                 backgroundColor: _cyan,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: _isJoining ? null : _handleJoinRoom,
               child: _isJoining
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : Text('JOIN DUEL ROOM ⚔️', style: GoogleFonts.pressStart2p(fontSize: 8.5)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : Text(
+                      'JOIN DUEL ROOM ⚔️',
+                      style: GoogleFonts.pressStart2p(fontSize: 8.5),
+                    ),
             ),
           ],
         ),
       ),
     );
   }
-
 
   Widget _buildChallengeFriendContent() {
     if (_isLoadingFriends) {
@@ -727,12 +836,18 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                           c.challengerName.toUpperCase(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.pressStart2p(fontSize: 7.5, color: Colors.white),
+                          style: GoogleFonts.pressStart2p(
+                            fontSize: 7.5,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${c.subject} • ${c.stakeCoins} 🪙',
-                          style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: _gold),
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 9.5,
+                            color: _gold,
+                          ),
                         ),
                       ],
                     ),
@@ -744,32 +859,46 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _green,
                           foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 5,
+                          ),
                           minimumSize: Size.zero,
                         ),
                         onPressed: () => _handleAcceptIncomingChallenge(c),
-                        child: Text('ACCEPT ⚔️', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                        child: Text(
+                          'ACCEPT ⚔️',
+                          style: GoogleFonts.pressStart2p(fontSize: 6.5),
+                        ),
                       ),
                       const SizedBox(width: 4),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _crimson,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 5,
+                          ),
                           minimumSize: Size.zero,
                         ),
                         onPressed: () => _handleDeclineIncomingChallenge(c),
-                        child: Text('DECLINE', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                        child: Text(
+                          'DECLINE',
+                          style: GoogleFonts.pressStart2p(fontSize: 6.5),
+                        ),
                       ),
                     ],
                   ),
-
                 ],
               ),
             );
           }),
           const SizedBox(height: 6),
-          Text('ALL FRIENDS:', style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.white54)),
+          Text(
+            'ALL FRIENDS:',
+            style: GoogleFonts.pressStart2p(fontSize: 7, color: Colors.white54),
+          ),
           const SizedBox(height: 6),
         ],
 
@@ -779,7 +908,10 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
               child: Text(
                 'NO ONLINE FRIENDS FOUND.\nInvite friends from the Social tab!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.jetBrainsMono(fontSize: 10, color: Colors.white54),
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 10,
+                  color: Colors.white54,
+                ),
               ),
             ),
           )
@@ -791,7 +923,10 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
               itemBuilder: (context, index) {
                 final f = _friends[index];
                 final fName = (f['name'] ?? 'Scholar').toString();
-                final fInitial = (f['avatarInitial'] ?? (fName.isNotEmpty ? fName.substring(0, 1) : 'S')).toString();
+                final fInitial =
+                    (f['avatarInitial'] ??
+                            (fName.isNotEmpty ? fName.substring(0, 1) : 'S'))
+                        .toString();
 
                 return Container(
                   padding: const EdgeInsets.all(8),
@@ -805,7 +940,13 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                       CircleAvatar(
                         radius: 14,
                         backgroundColor: _cyan.withOpacity(0.2),
-                        child: Text(fInitial, style: GoogleFonts.pressStart2p(fontSize: 10, color: _cyan)),
+                        child: Text(
+                          fInitial,
+                          style: GoogleFonts.pressStart2p(
+                            fontSize: 10,
+                            color: _cyan,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -816,12 +957,18 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                               fName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+                              style: GoogleFonts.pressStart2p(
+                                fontSize: 8,
+                                color: Colors.white,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Level ${f['level'] ?? 1} Scholar',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 9, color: Colors.white54),
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9,
+                                color: Colors.white54,
+                              ),
                             ),
                           ],
                         ),
@@ -830,11 +977,17 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _gold,
                           foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           minimumSize: Size.zero,
                         ),
                         onPressed: () => _sendFriendChallenge(f),
-                        child: Text('DUEL ⚔️', style: GoogleFonts.pressStart2p(fontSize: 6.5)),
+                        child: Text(
+                          'DUEL ⚔️',
+                          style: GoogleFonts.pressStart2p(fontSize: 6.5),
+                        ),
                       ),
                     ],
                   ),
@@ -846,4 +999,3 @@ class _PvPManualDuelDialogState extends State<PvPManualDuelDialog> {
     );
   }
 }
-
