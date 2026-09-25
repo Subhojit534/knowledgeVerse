@@ -347,9 +347,9 @@ class _BuildingActionPanelState extends State<BuildingActionPanel>
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            icon: const Icon(Icons.school, size: 18),
+            icon: const Icon(Icons.menu_book_rounded, size: 18),
             label: const Text(
-              'LEARN',
+              'OPEN BOOK',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 13,

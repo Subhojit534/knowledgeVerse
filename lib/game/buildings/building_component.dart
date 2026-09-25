@@ -103,7 +103,8 @@ class BuildingComponent extends PositionComponent with CollisionCallbacks {
       buildingName: name,
       onPressed: () {
         if (_isPlayerInProximity) {
-          triggerActionPanel();
+          BuildingManager().openLessonBook(buildingData);
+          onInteract?.call(this);
         }
       },
     );

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../../managers/building_manager.dart';
 import '../../managers/game_state.dart';
 import '../../managers/game_state_manager.dart';
+import '../dialogs/battle_quiz_arena.dart';
 import '../dialogs/building_action_panel.dart';
+import '../dialogs/building_learning_panel.dart';
+import '../dialogs/lesson_book_view.dart';
 import '../dialogs/lesson_launcher.dart';
 import 'bottom_navbar.dart';
 import 'currency_row.dart';
@@ -155,8 +158,27 @@ class _GameHudWidgetState extends State<GameHudWidget> {
                 onClose: () => buildingManager.closePanel(),
                 onLearn: () {
                   buildingManager.closePanel();
-                  LessonLauncher.launchBuilding(context, activeBuilding);
+                  buildingManager.openLessonBook(activeBuilding);
                 },
+              ),
+
+            // ─── Animated 3D Lesson Book (fullscreen overlay) ─────────────
+            if (buildingManager.activeBookBuilding != null)
+              LessonBookView(
+                building: buildingManager.activeBookBuilding!,
+                onClose: () => buildingManager.closeLessonBook(),
+                onGoToQuiz: () {
+                  final building = buildingManager.activeBookBuilding!;
+                  buildingManager.closeLessonBook();
+                  buildingManager.openQuiz(building);
+                },
+              ),
+
+            // ─── Full-screen Battle Trial Arena (animated characters on sides) ─
+            if (buildingManager.activeQuizBuilding != null)
+              BattleQuizArena(
+                building: buildingManager.activeQuizBuilding!,
+                onClose: () => buildingManager.closeQuiz(),
               ),
           ],
         );

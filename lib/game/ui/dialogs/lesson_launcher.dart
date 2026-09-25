@@ -5,6 +5,7 @@ import '../../buildings/sample_building_data.dart';
 import '../../managers/building_manager.dart';
 import '../../managers/game_state_manager.dart';
 import 'building_learning_panel.dart';
+import 'lesson_book_view.dart';
 
 /// Reusable transition manager launching interactive AI-powered Building Learning Panels
 /// directly over the character gameplay world session.
@@ -14,14 +15,7 @@ class LessonLauncher {
     BuildContext context,
     BuildingData building,
   ) async {
-    await launch(
-      context,
-      building: building,
-      buildingId: building.id,
-      buildingName: building.name,
-      subject: building.subject,
-      themeColor: building.themeColor,
-    );
+    BuildingManager().openLessonBook(building);
   }
 
   /// Launches an AI-powered learning interaction for a specified building.
@@ -40,14 +34,18 @@ class LessonLauncher {
     // Transition explicit GameStateManager to LoadingLesson
     GameStateManager().toLoadingLesson(targetBuilding);
 
-    // Show Building Learning Panel Dialog directly over the character gameplay world
+    // Show Animated 3D Lesson Book Dialog directly over the character gameplay world
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return BuildingLearningPanel(
+        return LessonBookView(
           building: targetBuilding,
           onClose: () => Navigator.of(dialogContext).pop(),
+          onGoToQuiz: () {
+            Navigator.of(dialogContext).pop();
+            BuildingManager().openQuiz(targetBuilding);
+          },
         );
       },
     );

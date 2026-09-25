@@ -160,4 +160,46 @@ class BuildingManager extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Currently open animated Lesson Book building (null if closed).
+  /// Currently open animated Lesson Book building (null if closed).
+  BuildingData? _activeBookBuilding;
+  BuildingData? get activeBookBuilding => _activeBookBuilding;
+
+  /// Opens the animated 3D Lesson Book for a building.
+  void openLessonBook(BuildingData building) {
+    _activePanelBuilding = null; // Close action panel if open
+    _activeQuizBuilding = null; // Close quiz if open
+    _activeBookBuilding = building;
+    notifyListeners();
+  }
+
+  /// Closes the currently open Lesson Book.
+  void closeLessonBook() {
+    if (_activeBookBuilding != null) {
+      _activeBookBuilding = null;
+      notifyListeners();
+    }
+  }
+
+  /// Currently open Quiz Arena building (null if closed).
+  BuildingData? _activeQuizBuilding;
+  BuildingData? get activeQuizBuilding => _activeQuizBuilding;
+
+  /// Opens the Quiz Arena for a building outside the book.
+  void openQuiz(BuildingData building) {
+    _activePanelBuilding = null;
+    _activeBookBuilding = null;
+    _activeQuizBuilding = building;
+    notifyListeners();
+  }
+
+  /// Closes the currently open Quiz Arena.
+  void closeQuiz() {
+    if (_activeQuizBuilding != null) {
+      _activeQuizBuilding = null;
+      notifyListeners();
+    }
+  }
 }
+

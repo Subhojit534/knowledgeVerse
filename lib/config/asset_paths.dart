@@ -35,6 +35,10 @@ abstract final class AssetPaths {
   static const String playerArcanist = PlayerAssets.idleArcanistIdleFront01;
   static const String playerArcanistPortrait = PlayerAssets.idleArcanistIdleFront01;
 
+  // --- Quiz & Combat FX Assets ---
+  static const String quizFailAnimation = 'assets/images/fail_fall.gif';
+  static const String quizVictoryAnimation = 'assets/images/quiz_victory.gif';
+
   // --- Building Sprite Assets ---
   static const String buildingGrandHall = BuildingAssets.grandHall;
   static const String buildingAstronomyTower = BuildingAssets.astronomyTower;

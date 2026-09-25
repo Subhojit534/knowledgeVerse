@@ -16,6 +16,12 @@ class LearningService {
   /// Cache for fetched learning content
   static final Map<String, LearningContentResponse> _cache = {};
 
+  /// Set cached content (useful for offline mock or testing).
+  @visibleForTesting
+  static void setCachedContent(String key, LearningContentResponse content) {
+    _cache[key] = content;
+  }
+
   /// Fetches AI-generated learning explanation and 4 MCQs for a given subject building.
   static Future<LearningContentResponse> fetchLearningContent(LearningRequest request) async {
     final cacheKey = '${request.buildingId}_${request.subject}_${request.studentLevel}';
