@@ -25,7 +25,13 @@ abstract final class AssetPaths {
   static List<String> wizardIdleFrames(String dir) => playerIdleFrames();
   static List<String> wizardWalkFrames(String dir) => playerWalkFrames();
 
-  // --- Player Character Sprites ---
+  // --- Player Character Sprites & Avatars ---
+  static const String avatarMale = 'assets/images/avatar_male.jpg';
+  static const String avatarFemale = 'assets/images/avatar_female.jpg';
+
+  static String getAvatarPortrait(int index) =>
+      index == 1 ? avatarFemale : avatarMale;
+
   static const String playerArcanist = PlayerAssets.idleArcanistIdleFront01;
   static const String playerArcanistPortrait = PlayerAssets.idleArcanistIdleFront01;
 

@@ -30,7 +30,14 @@ class PortraitCardWidget extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ProfileScreen(profile: profile)),
+          PageRouteBuilder(
+            opaque: false,
+            barrierColor: const Color(0x99000000),
+            pageBuilder: (_, __, ___) => ProfileScreen(profile: profile),
+            transitionsBuilder: (_, anim, __, child) =>
+                FadeTransition(opacity: anim, child: child),
+            transitionDuration: const Duration(milliseconds: 300),
+          ),
         );
       },
       child: Container(
@@ -58,9 +65,11 @@ class PortraitCardWidget extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFFF2CA50), width: 2),
                 color: const Color(0xFF0D1B2A),
-                image: const DecorationImage(
+                image: DecorationImage(
                   image: AssetImage(
-                    AssetPaths.playerArcanistPortrait,
+                    AssetPaths.getAvatarPortrait(
+                      profile?.avatarIndex ?? PlayerProfile.current?.avatarIndex ?? 0,
+                    ),
                   ),
                   fit: BoxFit.cover,
                 ),

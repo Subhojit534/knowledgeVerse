@@ -79,3 +79,30 @@ android/build/
 **/linux/flutter/ephemeral/
 **/macos/Flutter/ephemeral/
 **/windows/flutter/ephemeral/
+
+# ==============================================================================
+# Raw / Unprocessed External Asset Source Archives & Working Directories
+# (Processed game sprites & UI assets are located in assets/ and game-assets/)
+# ==============================================================================
+Humble Gift - Paper UI System v1.1/
+male_hero_free/
+sample(idle&walk)/
+PixelPlanets/
+
+# Design, Vector & Raw Sprite Project Formats
+*.aseprite
+*.psd
+*.ai
+*.xcf
+*.blend
+*.blend1
+
+# Compression Archives & Temp Backups
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.bak
+*.tmp
+*.temp
+*.orig

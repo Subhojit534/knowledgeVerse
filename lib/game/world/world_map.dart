@@ -57,9 +57,11 @@ class WorldMap extends World
   WorldMap({
     required this.joystick,
     this.onBuildingNotification,
+    int? avatarIndex,
   }) : player = Player(
           position: Vector2(800.0, 840.0), // Bottom center spawn
           joystick: joystick,
+          avatarIndex: avatarIndex,
         );
 
   @override

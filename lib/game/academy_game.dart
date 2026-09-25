@@ -4,6 +4,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../config/game_constants.dart';
+import '../models/player_profile.dart';
 import 'managers/asset_manager.dart';
 import 'managers/game_state.dart';
 import 'player/input/virtual_joystick.dart';
@@ -29,8 +30,10 @@ class AcademyGame extends FlameGame with HasCollisionDetection {
     // 2. Construct HUD Virtual Joystick control
     joystick = VirtualJoystick.create();
 
-    // 3. Instantiate WorldMap passing joystick input reference
-    worldMap = WorldMap(joystick: joystick);
+    // 3. Resolve active avatar and instantiate WorldMap
+    final profile = PlayerProfile.current ?? await PlayerProfile.load();
+    final avatarIndex = profile?.avatarIndex ?? 0;
+    worldMap = WorldMap(joystick: joystick, avatarIndex: avatarIndex);
 
     // 4. Set active game world instance
     world = worldMap;

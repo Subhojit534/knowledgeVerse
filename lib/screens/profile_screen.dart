@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player_profile.dart';
 import '../services/api_service.dart';
+import '../widgets/book_profile_view.dart';
 import 'settings_screen.dart';
 
 class SubjectDistrict {
@@ -95,6 +96,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _energy = 100;
   int _streakDays = 1;
   int _weeklyQuestions = 12;
+  bool _isBookView = true;
+  bool _isRotated = false;
 
   @override
   void initState() {
@@ -204,6 +207,202 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isBookView) {
+      return Scaffold(
+        backgroundColor: const Color(0xE80E0E1B),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 1. Dark vignette background
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/loading_bg.jpg',
+                fit: BoxFit.cover,
+                color: const Color(0xBB000000),
+                colorBlendMode: BlendMode.darken,
+                errorBuilder: (_, __, ___) =>
+                    const ColoredBox(color: Color(0xFF0F0E18)),
+              ),
+            ),
+
+            // 2. Scanlines
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Color(0x1F000000)],
+                      stops: [0.5, 0.5],
+                      tileMode: TileMode.repeated,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 3. Animated RPG Book Profile View (with responsive Mobile rotation support)
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isPortrait =
+                      constraints.maxWidth < constraints.maxHeight;
+                  final showRotateOption =
+                      isPortrait && constraints.maxWidth < 600;
+
+                  return Stack(
+                    children: [
+                      // Centered Book View: fills full width, or rotates 90° to fill full phone screen
+                      Center(
+                        child: _isRotated && showRotateOption
+                            ? RotatedBox(
+                                quarterTurns: 1,
+                                child: SizedBox(
+                                  width: constraints.maxHeight,
+                                  height: constraints.maxWidth,
+                                  child: BookProfileView(
+                                    profile: _profile,
+                                    onClose: () {
+                                      if (Navigator.canPop(context)) {
+                                        Navigator.pop(context);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              )
+                            : BookProfileView(
+                                profile: _profile,
+                                onClose: () {
+                                  if (Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                  }
+                                },
+                              ),
+                      ),
+
+                      // Floating Top Control Bar (Back button + Mobile Rotate/Expand toggle)
+                      Positioned(
+                        top: 8,
+                        left: 12,
+                        right: 12,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Back Button
+                            GestureDetector(
+                              key: const Key('book_back_nav_button'),
+                              onTap: () {
+                                if (Navigator.canPop(context)) {
+                                  Navigator.pop(context);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E2530)
+                                      .withValues(alpha: 0.85),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: const Color(0xFF55B868),
+                                      width: 1.2),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black45,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.arrow_back_rounded,
+                                        size: 14, color: Color(0xFF55B868)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'BACK',
+                                      style: GoogleFonts.pressStart2p(
+                                        fontSize: 7.0,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFFE5D5BA),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Mobile Rotate / Expand Toggle (shows on mobile portrait)
+                            if (showRotateOption)
+                              GestureDetector(
+                                key: const Key('rotate_book_toggle'),
+                                onTap: () =>
+                                    setState(() => _isRotated = !_isRotated),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _isRotated
+                                        ? const Color(0xFF2E7D5B)
+                                            .withValues(alpha: 0.90)
+                                        : const Color(0xFF1E2530)
+                                            .withValues(alpha: 0.85),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: _isRotated
+                                          ? const Color(0xFFF3C74C)
+                                          : const Color(0xFF55B868),
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black45,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.screen_rotation_rounded,
+                                        size: 14,
+                                        color: _isRotated
+                                            ? const Color(0xFFF3C74C)
+                                            : const Color(0xFF55B868),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        _isRotated ? 'PORTRAIT' : 'EXPAND BOOK',
+                                        style: GoogleFonts.pressStart2p(
+                                          fontSize: 6.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: _isRotated
+                                              ? const Color(0xFFF3C74C)
+                                              : const Color(0xFFE5D5BA),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+          ],
+        ),
+      );
+    }
+
     final size = MediaQuery.sizeOf(context);
 
     return Scaffold(
@@ -397,6 +596,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
+
+                  // Book View Toggle
+                  GestureDetector(
+                    onTap: () => setState(() => _isBookView = true),
+                    child: _OrnatePixelBox(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.auto_stories_rounded,
+                            color: Color(0xFFF2CA50),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'BOOK',
+                            style: GoogleFonts.pressStart2p(
+                              fontSize: 7.5,
+                              color: const Color(0xFFF2CA50),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -440,12 +666,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       offset: Offset(3, 3),
                     ),
                   ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.face_retouching_natural_rounded,
-                    color: Color(0xFFF2CA50),
-                    size: 42,
+                  image: DecorationImage(
+                    image: AssetImage(
+                      _profile.avatarIndex == 1
+                          ? 'assets/images/avatar_female.jpg'
+                          : 'assets/images/avatar_male.jpg',
+                    ),
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),

@@ -5,13 +5,14 @@ import '../services/intro_service.dart';
 import 'splash_screen.dart';
 import 'world_generation_screen.dart';
 
-const int _kStepCount = 4;
+const int _kStepCount = 5;
 
 /// "High Fidelity Onboarding Flow" matching exact Stitch screens:
 /// 1. "High Fidelity - Name & Password Entry"
 /// 2. "High Fidelity - Class Selection"
 /// 3. "High Fidelity - District Selection"
 /// 4. "High Fidelity - Difficulty Selection"
+/// 5. "High Fidelity - Avatar Selection"
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -21,6 +22,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentStep = 0;
+  int _avatarIndex = 0;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -111,7 +113,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       difficulty: _difficulty,
       worldTheme: 'Green Highlands',
       learningGoal: 'Master all academic domains',
-      avatarIndex: 0,
+      avatarIndex: _avatarIndex,
     );
   }
 
@@ -158,7 +160,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       final intro = await IntroService.fetchIntro(profile);
-      final finalProfile = intro.savedProfile ?? profile;
+      final finalProfile = (intro.savedProfile ?? profile).copyWith(
+        avatarIndex: profile.avatarIndex,
+      );
       await finalProfile.save();
       if (!mounted) return;
 
@@ -373,9 +377,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   blurRadius: 6,
                 ),
               ],
-              image: const DecorationImage(
-                image: NetworkImage(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuAuhfOB_Q4eTYAsRfzItcrBsL_J_1-f37AAIuQTWlE0s36L3gtEY8UyJnHrwqaTxbztUilJWQxtnA_qP_GxLbek2DRr8SZZXIz8pH4KBPYVs9_KGHLWWJEed9-LGoYcRp-ZXme2Zkwc4J48YNKxr1TrE2VjIGvutIZrG75o9bagvHadwGSmSr6jAfqvWktwBlwTB4fikah8YEDgYs-usCQ5SSkd_9srBEibaCtmxeWwyeoUvPVipjBjUuby4QzDU58T_saUQta36Cs',
+              image: DecorationImage(
+                image: AssetImage(
+                  _avatarIndex == 1
+                      ? 'assets/images/avatar_female.jpg'
+                      : 'assets/images/avatar_male.jpg',
                 ),
                 fit: BoxFit.cover,
               ),
@@ -400,7 +406,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Level 1 Civilization Architect',
+            _avatarIndex == 1
+                ? 'Level 1 Astral Sorceress'
+                : 'Level 1 Hero Knight',
             textAlign: TextAlign.center,
             style: GoogleFonts.jetBrainsMono(
               fontWeight: FontWeight.w400,
@@ -434,6 +442,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9,
                     color: const Color(0xFF9DDCBB),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Avatar: ${_avatarIndex == 1 ? "Lyra (Sorceress)" : "Aiden (Hero)"}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 8.5,
+                    color: const Color(0xFFFDE047),
                   ),
                 ),
               ],
@@ -623,7 +639,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── SWITCHER FOR THE 4 STITCH HIGH FIDELITY SCREENS ───────────────────────
+  // ── SWITCHER FOR THE 5 STITCH HIGH FIDELITY SCREENS ───────────────────────
   Widget _buildCurrentStepView() {
     switch (_currentStep) {
       case 0:
@@ -634,6 +650,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return _buildStep3DistrictSelection();
       case 3:
         return _buildStep4DifficultySelection();
+      case 4:
+        return _buildStep5AvatarSelection();
       default:
         return _buildStep1NameEntry();
     }
@@ -1120,6 +1138,206 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           }).toList(),
         ),
       ],
+    );
+  }
+
+  // ── SCREEN 5: "High Fidelity - Hero Avatar Selection" ────────────────────
+  Widget _buildStep5AvatarSelection() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title
+          Text(
+            'CHOOSE YOUR HERO AVATAR',
+            style: GoogleFonts.spaceMono(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: const Color(0xFFF2CA50),
+              letterSpacing: 1.2,
+              shadows: const [
+                Shadow(color: Color(0xFF3C2F00), offset: Offset(2, 2)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Select the hero avatar who represents you in the KnowledgeVerse.',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              color: const Color(0xFFD0C5AF),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Avatar Option 0: Male Hero (from male_hero_free)
+          _buildAvatarOptionCard(
+            index: 0,
+            name: 'AIDEN • HERO KNIGHT',
+            classTitle: 'VALIANT WARRIOR',
+            desc: 'Brave, steadfast adventurer ready to conquer trials across the realm.',
+            traits: '⚔️ Courage • ⚡ Agility • 🛡️ Valour',
+            imagePath: 'assets/images/avatar_male.jpg',
+            accentColor: const Color(0xFFF2CA50),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Avatar Option 1: Female Sorceress (from sample(idle&walk))
+          _buildAvatarOptionCard(
+            index: 1,
+            name: 'LYRA • ASTRAL SORCERESS',
+            classTitle: 'MYSTIC SCHOLAR',
+            desc: 'Dragon-horned spellcaster channeling deep arcane secrets & lore.',
+            traits: '🔮 Arcane • ✨ Insight • 🌟 Intellect',
+            imagePath: 'assets/images/avatar_female.jpg',
+            accentColor: const Color(0xFF70D6FF),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarOptionCard({
+    required int index,
+    required String name,
+    required String classTitle,
+    required String desc,
+    required String traits,
+    required String imagePath,
+    required Color accentColor,
+  }) {
+    final bool isSelected = _avatarIndex == index;
+
+    return GestureDetector(
+      onTap: () => setState(() => _avatarIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF1E1E32)
+              : const Color(0xFF111125),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF4D4635),
+            width: isSelected ? 2.5 : 1.5,
+          ),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: Color(0xFFF2CA50),
+                    blurRadius: 8,
+                    spreadRadius: 0.5,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            // Circular Avatar Portrait from Chat Uploads with glowing frame
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFFF2CA50) : const Color(0xFF4D4635),
+                  width: 2.5,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+                image: DecorationImage(
+                  image: AssetImage(imagePath),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Info Column
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          style: GoogleFonts.pressStart2p(
+                            fontSize: 8.5,
+                            color: isSelected
+                                ? const Color(0xFFF2CA50)
+                                : Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.15),
+                          border: Border.all(color: accentColor.withValues(alpha: 0.6), width: 1),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          classTitle,
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 7.5,
+                            fontWeight: FontWeight.bold,
+                            color: accentColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    desc,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 9.5,
+                      color: const Color(0xFFD0C5AF),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    traits,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 8.5,
+                      color: isSelected ? const Color(0xFF4ADE80) : const Color(0xFF8888AA),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Selection Checkmark / Radio Badge
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? const Color(0xFF065F46) : const Color(0xFF141424),
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF4ADE80) : const Color(0xFF4D4635),
+                  width: 1.5,
+                ),
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check_rounded, color: Color(0xFF4ADE80), size: 16)
+                  : null,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

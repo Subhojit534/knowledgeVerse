@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/asset_paths.dart';
 import '../../config/game_constants.dart';
+import '../../models/player_profile.dart';
 import '../buildings/building_component.dart';
 import '../managers/asset_manager.dart';
 import '../managers/movement_controller.dart';
@@ -42,9 +43,10 @@ class _FootstepParticle {
 class Player extends PositionComponent with CollisionCallbacks {
   JoystickComponent? joystick;
   final MovementController controller;
-  final PlayerAnimationController animationController = PlayerAnimationController();
+  late final PlayerAnimationController animationController;
+  int avatarIndex;
 
-  Sprite? _arcanistSprite; // Fallback single-frame sprite from game-assets
+  Sprite? _arcanistSprite; // Fallback single-frame sprite
 
   double _idleTime = 0.0;
   double _footstepTimer = 0.0;
@@ -54,23 +56,51 @@ class Player extends PositionComponent with CollisionCallbacks {
   Player({
     required Vector2 position,
     this.joystick,
+    int? avatarIndex,
     double speed = GameConstants.playerSpeed,
-  })  : controller = MovementController(speed: speed),
+  })  : avatarIndex = avatarIndex ?? PlayerProfile.current?.avatarIndex ?? 0,
+        controller = MovementController(speed: speed),
         super(
           position: position,
           size: Vector2.all(GameConstants.playerSize),
           anchor: Anchor.center,
-        );
+        ) {
+    animationController = PlayerAnimationController(avatarIndex: this.avatarIndex);
+  }
+
+  /// Updates active avatar at runtime
+  Future<void> updateAvatar(int newIndex) async {
+    avatarIndex = newIndex;
+    animationController.avatarIndex = newIndex;
+    await animationController.load();
+    _loadFallbackSprite();
+  }
+
+  void _loadFallbackSprite() {
+    if (avatarIndex == 0) {
+      _arcanistSprite = GameAssetManager().getSprite('game-assets/player/male/idle_0.png');
+    } else if (avatarIndex == 1) {
+      _arcanistSprite = GameAssetManager().getSprite('game-assets/player/female/idle_0.png');
+    } else {
+      _arcanistSprite = GameAssetManager().getSprite(AssetPaths.playerArcanist);
+    }
+  }
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
 
     add(CircleHitbox());
-    await animationController.load();
 
-    // Load arcanist sprite as fallback when animation frames are missing
-    _arcanistSprite = GameAssetManager().getSprite(AssetPaths.playerArcanist);
+    // Resolve profile avatar if available
+    final profile = PlayerProfile.current ?? await PlayerProfile.load();
+    if (profile != null) {
+      avatarIndex = profile.avatarIndex;
+      animationController.avatarIndex = avatarIndex;
+    }
+
+    await animationController.load();
+    _loadFallbackSprite();
   }
 
   @override

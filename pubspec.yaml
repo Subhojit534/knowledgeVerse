@@ -45,6 +45,8 @@ flutter:
     - game-assets/player/walk/
     - game-assets/player/cast/
     - game-assets/player/idle/
+    - game-assets/player/male/
+    - game-assets/player/female/
     - game-assets/nature/
     - game-assets/nature/bushes/
     - game-assets/nature/flowers/
@@ -74,3 +76,12 @@ flutter:
     - game-assets/tiles/roads/
     - game-assets/tiles/cliffs/
     - game-assets/tiles/grass/
+    - assets/paper_ui/
+    - assets/paper_ui/equipment/
+    - assets/paper_ui/day_night/
+    - assets/paper_ui/day_night/half/day/
+    - assets/paper_ui/progress/
+    - assets/paper_ui/bookmarks/
+    - assets/paper_ui/buttons/
+    - assets/paper_ui/holders/
+    - assets/paper_ui/banners/

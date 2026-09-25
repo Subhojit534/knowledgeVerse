@@ -10,10 +10,12 @@ import 'player_animation_state.dart';
 enum PlayerFacing { up, down, left, right }
 
 /// Reusable animation controller managing directional player sprite sheet animations
-/// (Up -> walk_back/idle_back, Down -> walk_front/idle_front, Left -> walk_left, Right -> walk_right)
+/// for both Avatar 0 (Male Hero), Avatar 1 (Female Sorceress), and legacy Arcanist,
 /// with 0° rotation guaranteed at all times.
 class PlayerAnimationController {
   final Map<String, SpriteAnimationTicker> _animationTickers = {};
+
+  int avatarIndex;
 
   /// Current active animation state (idle, walk, interact).
   PlayerAnimationState currentState = PlayerAnimationState.idle;
@@ -21,15 +23,22 @@ class PlayerAnimationController {
   /// Current facing direction (up, down, left, right).
   PlayerFacing currentFacing = PlayerFacing.down;
 
+  /// Horizontal facing direction for 2D side-scrolling sprite sheets.
+  PlayerFacing horizontalFacing = PlayerFacing.right;
+
   /// Velocity threshold to trigger walking state.
   final double movementThreshold;
 
   PlayerAnimationController({
+    this.avatarIndex = 0,
     this.movementThreshold = 5.0,
-  });
+  }) {
+    horizontalFacing = avatarIndex == 1 ? PlayerFacing.left : PlayerFacing.right;
+  }
 
-  /// Loads directional player animations from game-assets pipeline.
+  /// Loads directional player animations from game-assets pipeline based on avatarIndex.
   Future<void> load() async {
+    _animationTickers.clear();
     final assetManager = GameAssetManager();
 
     // Helper to load and build sprite sequence animation
@@ -48,51 +57,82 @@ class PlayerAnimationController {
       return anim?.createTicker();
     }
 
-    // 1. Idle Front (Down / Left / Right)
-    final idleFrontTicker = await buildTicker([
-      PlayerAssets.idleArcanistIdleFront01,
-      PlayerAssets.idleArcanistIdleFront02,
-      PlayerAssets.idleArcanistIdleFront03,
-    ], 0.20);
-    if (idleFrontTicker != null) _animationTickers['idle_front'] = idleFrontTicker;
+    if (avatarIndex == 0) {
+      // ── AVATAR 0: MALE HERO (from male_hero_free) ───────────────────────────
+      final idleRight = await buildTicker(PlayerAssets.maleIdle, 0.12);
+      final idleLeft = await buildTicker(PlayerAssets.maleIdleLeft, 0.12);
+      final walkRight = await buildTicker(PlayerAssets.maleWalk, 0.08);
+      final walkLeft = await buildTicker(PlayerAssets.maleWalkLeft, 0.08);
 
-    // 2. Idle Back (Up)
-    final idleBackTicker = await buildTicker([
-      PlayerAssets.idleArcanistIdleBack01,
-      PlayerAssets.idleArcanistIdleBack02,
-    ], 0.25);
-    if (idleBackTicker != null) _animationTickers['idle_back'] = idleBackTicker;
+      if (idleRight != null) _animationTickers['idle_right'] = idleRight;
+      if (idleLeft != null) _animationTickers['idle_left'] = idleLeft;
+      if (walkRight != null) _animationTickers['walk_right'] = walkRight;
+      if (walkLeft != null) _animationTickers['walk_left'] = walkLeft;
 
-    // 3. Walk Back (Up)
-    final walkBackTicker = await buildTicker([
-      PlayerAssets.walkArcanistWalkBack,
-      PlayerAssets.idleArcanistIdleBack01,
-      PlayerAssets.walkArcanistWalkBack,
-      PlayerAssets.idleArcanistIdleBack02,
-    ], 0.15);
-    if (walkBackTicker != null) _animationTickers['walk_back'] = walkBackTicker;
+      // Directional fallbacks
+      if (idleRight != null) _animationTickers['idle_front'] = idleRight;
+      if (idleRight != null) _animationTickers['idle_back'] = idleRight;
+      if (walkRight != null) _animationTickers['walk_front'] = walkRight;
+      if (walkRight != null) _animationTickers['walk_back'] = walkRight;
+    } else if (avatarIndex == 1) {
+      // ── AVATAR 1: FEMALE SORCERESS (from sample(idle&walk)) ──────────────────
+      final idleLeft = await buildTicker(PlayerAssets.femaleIdle, 0.12);
+      final idleRight = await buildTicker(PlayerAssets.femaleIdleRight, 0.12);
+      final walkLeft = await buildTicker(PlayerAssets.femaleWalk, 0.045);
+      final walkRight = await buildTicker(PlayerAssets.femaleWalkRight, 0.045);
 
-    // 4. Walk Front (Down)
-    final walkFrontTicker = await buildTicker([
-      PlayerAssets.idleArcanistIdleFront01,
-      PlayerAssets.idleArcanistIdleFront02,
-      PlayerAssets.idleArcanistIdleFront03,
-    ], 0.14);
-    if (walkFrontTicker != null) _animationTickers['walk_front'] = walkFrontTicker;
+      if (idleLeft != null) _animationTickers['idle_left'] = idleLeft;
+      if (idleRight != null) _animationTickers['idle_right'] = idleRight;
+      if (walkLeft != null) _animationTickers['walk_left'] = walkLeft;
+      if (walkRight != null) _animationTickers['walk_right'] = walkRight;
 
-    // 5. Walk Left (Left)
-    final walkLeftTicker = await buildTicker([
-      PlayerAssets.walkArcanistWalkLeft01,
-      PlayerAssets.walkArcanistWalkLeft02,
-    ], 0.14);
-    if (walkLeftTicker != null) _animationTickers['walk_left'] = walkLeftTicker;
+      // Directional fallbacks
+      if (idleLeft != null) _animationTickers['idle_front'] = idleLeft;
+      if (idleLeft != null) _animationTickers['idle_back'] = idleLeft;
+      if (walkLeft != null) _animationTickers['walk_front'] = walkLeft;
+      if (walkLeft != null) _animationTickers['walk_back'] = walkLeft;
+    } else {
+      // ── LEGACY FALLBACK: ARCANIST ──────────────────────────────────────────
+      final idleFrontTicker = await buildTicker([
+        PlayerAssets.idleArcanistIdleFront01,
+        PlayerAssets.idleArcanistIdleFront02,
+        PlayerAssets.idleArcanistIdleFront03,
+      ], 0.20);
+      if (idleFrontTicker != null) _animationTickers['idle_front'] = idleFrontTicker;
 
-    // 6. Walk Right (Right)
-    final walkRightTicker = await buildTicker([
-      PlayerAssets.walkArcanistWalkRight01,
-      PlayerAssets.walkArcanistWalkRight02,
-    ], 0.14);
-    if (walkRightTicker != null) _animationTickers['walk_right'] = walkRightTicker;
+      final idleBackTicker = await buildTicker([
+        PlayerAssets.idleArcanistIdleBack01,
+        PlayerAssets.idleArcanistIdleBack02,
+      ], 0.25);
+      if (idleBackTicker != null) _animationTickers['idle_back'] = idleBackTicker;
+
+      final walkBackTicker = await buildTicker([
+        PlayerAssets.walkArcanistWalkBack,
+        PlayerAssets.idleArcanistIdleBack01,
+        PlayerAssets.walkArcanistWalkBack,
+        PlayerAssets.idleArcanistIdleBack02,
+      ], 0.15);
+      if (walkBackTicker != null) _animationTickers['walk_back'] = walkBackTicker;
+
+      final walkFrontTicker = await buildTicker([
+        PlayerAssets.idleArcanistIdleFront01,
+        PlayerAssets.idleArcanistIdleFront02,
+        PlayerAssets.idleArcanistIdleFront03,
+      ], 0.14);
+      if (walkFrontTicker != null) _animationTickers['walk_front'] = walkFrontTicker;
+
+      final walkLeftTicker = await buildTicker([
+        PlayerAssets.walkArcanistWalkLeft01,
+        PlayerAssets.walkArcanistWalkLeft02,
+      ], 0.14);
+      if (walkLeftTicker != null) _animationTickers['walk_left'] = walkLeftTicker;
+
+      final walkRightTicker = await buildTicker([
+        PlayerAssets.walkArcanistWalkRight01,
+        PlayerAssets.walkArcanistWalkRight02,
+      ], 0.14);
+      if (walkRightTicker != null) _animationTickers['walk_right'] = walkRightTicker;
+    }
   }
 
   /// Automatically updates facing direction and active animation ticker based on movement velocity.
@@ -106,9 +146,12 @@ class PlayerAnimationController {
     if (speed > movementThreshold) {
       currentState = PlayerAnimationState.walk;
 
-      // Determine nearest cardinal direction for diagonal movement
       final double dx = velocity.x;
       final double dy = velocity.y;
+
+      if (dx.abs() > 3.0) {
+        horizontalFacing = dx < 0 ? PlayerFacing.left : PlayerFacing.right;
+      }
 
       if (dy.abs() > dx.abs()) {
         currentFacing = dy < 0 ? PlayerFacing.up : PlayerFacing.down;
@@ -130,6 +173,17 @@ class PlayerAnimationController {
   }
 
   String _getActiveAnimationKey() {
+    final bool isLeft = horizontalFacing == PlayerFacing.left;
+
+    if (avatarIndex <= 1) {
+      if (currentState == PlayerAnimationState.walk) {
+        return isLeft ? 'walk_left' : 'walk_right';
+      } else {
+        return isLeft ? 'idle_left' : 'idle_right';
+      }
+    }
+
+    // Default Arcanist 4-way
     if (currentState == PlayerAnimationState.walk) {
       switch (currentFacing) {
         case PlayerFacing.up:
@@ -158,14 +212,30 @@ class PlayerAnimationController {
     final sprite = _animationTickers[activeKey]?.getSprite();
     if (sprite != null) return sprite;
 
-    // Fallback to idle front
-    return _animationTickers['idle_front']?.getSprite();
+    final fallbackKey = (avatarIndex == 1) ? 'idle_left' : 'idle_right';
+    return _animationTickers[fallbackKey]?.getSprite() ??
+        _animationTickers['idle_front']?.getSprite();
   }
 
   bool render(Canvas canvas, {required Vector2 size}) {
     final sprite = getCurrentSprite();
     if (sprite != null) {
-      sprite.render(canvas, size: size);
+      final double srcW = sprite.srcSize.x;
+      final double srcH = sprite.srcSize.y;
+      if (srcW > 0 && srcH > 0) {
+        // Keep pixel-perfect aspect ratio anchored to bottom-center (feet at bottom)
+        final double drawH = size.y * (srcH / 48.0);
+        final double drawW = size.x * (srcW / 48.0);
+        final double offsetX = (size.x - drawW) / 2;
+        final double offsetY = size.y - drawH;
+        sprite.render(
+          canvas,
+          position: Vector2(offsetX, offsetY),
+          size: Vector2(drawW, drawH),
+        );
+      } else {
+        sprite.render(canvas, size: size);
+      }
       return true;
     }
     return false;
