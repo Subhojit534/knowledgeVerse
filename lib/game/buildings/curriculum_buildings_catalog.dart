@@ -287,7 +287,7 @@ abstract final class CurriculumBuildingsCatalog {
       ];
     }
 
-    if (grade.contains('6') || grade.contains('7') || grade.contains('8')) {
+    if (grade.contains('5') || grade.contains('6') || grade.contains('7') || grade.contains('8')) {
       return [
         BuildingData(
           id: 'math_middle_numbers',

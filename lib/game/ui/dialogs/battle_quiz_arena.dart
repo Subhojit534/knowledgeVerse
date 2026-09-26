@@ -336,6 +336,7 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
       subject: widget.building.subject,
       correctAnswers: _score,
       totalQuestions: totalQ,
+      updateLocalProfile: false,
     ));
 
     if (mounted) {

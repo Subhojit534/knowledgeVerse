@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
 import '../services/api_service.dart';
+import '../services/curriculum_seed_catalog.dart';
 import '../services/intro_service.dart';
 import 'splash_screen.dart';
 import 'world_generation_screen.dart';
@@ -35,6 +36,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _isSubmitting = false;
 
   static const List<String> _grades = [
+    'Class 5',
     'Class 6',
     'Class 7',
     'Class 8',
@@ -47,9 +49,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const List<String> _curriculums = [
     'CBSE',
     'ICSE',
-    'IB',
-    'Cambridge',
-    'State Board',
+    'BSEB',
+    'WBBSE',
+    'DBSE',
   ];
 
   static const List<Map<String, String>> _difficulties = [
@@ -104,7 +106,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   PlayerProfile _buildProfile() {
     final name = _nameController.text.trim();
     final pwd = _passwordController.text.trim();
+    final classId = CurriculumSeedCatalog.findClassId(
+      grade: _grade,
+      board: _curriculum,
+    );
     return PlayerProfile(
+      classId: classId,
       name: name.isEmpty ? 'Explorer' : name,
       password: pwd.isEmpty ? 'password123' : pwd,
       grade: _grade,
@@ -167,6 +174,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         final regRes = await ApiService.registerExplorer(
           name: profile.name,
           password: profile.password,
+          classId: profile.effectiveClassId,
           grade: profile.grade,
           curriculum: profile.curriculum,
           difficulty: profile.difficulty,

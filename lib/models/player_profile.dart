@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/curriculum_seed_catalog.dart';
 
 /// Global reactive notifier for real-time player profile updates
 class PlayerProfileNotifier extends ValueNotifier<PlayerProfile?> {
@@ -21,6 +22,7 @@ class PlayerProfileNotifier extends ValueNotifier<PlayerProfile?> {
 class PlayerProfile {
   const PlayerProfile({
     this.id = '',
+    this.classId = '',
     this.name = '',
     this.password = '',
     this.grade = '',
@@ -45,9 +47,19 @@ class PlayerProfile {
   });
 
   final String id;
+  final String classId;
   final String name;
   final String password;
   final String grade;
+
+  /// Returns the effective class UUID, resolving from CurriculumSeedCatalog if absent.
+  String get effectiveClassId {
+    if (classId.isNotEmpty && classId != '0') return classId;
+    return CurriculumSeedCatalog.findClassId(
+      grade: grade.isNotEmpty ? grade : 'Class 10',
+      board: curriculum.isNotEmpty ? curriculum : 'CBSE',
+    );
+  }
   final String curriculum;
   final List<String> subjects;
   final String difficulty;
@@ -131,6 +143,7 @@ class PlayerProfile {
 
   PlayerProfile copyWith({
     String? id,
+    String? classId,
     String? name,
     String? password,
     String? grade,
@@ -158,6 +171,7 @@ class PlayerProfile {
 
     return PlayerProfile(
       id: id ?? this.id,
+      classId: classId ?? this.classId,
       name: name ?? this.name,
       password: password ?? this.password,
       grade: grade ?? this.grade,
@@ -309,6 +323,7 @@ class PlayerProfile {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'class_id': effectiveClassId,
         'name': name,
         'password': password,
         'grade': grade,
@@ -337,6 +352,9 @@ class PlayerProfile {
   Map<String, dynamic> toBackendJson() {
     final map = <String, dynamic>{
       'name': name.trim(),
+      'class_id': effectiveClassId,
+      'grade': grade.isNotEmpty ? grade : 'Class 10',
+      'curriculum': curriculum.isNotEmpty ? curriculum : 'CBSE',
       'avatar_id': avatarIndex.toString(),
       'difficulty': difficulty.isNotEmpty ? difficulty : 'Medium',
       'xp': xp,
@@ -368,6 +386,7 @@ class PlayerProfile {
 
     return PlayerProfile(
       id: json['id']?.toString() ?? '',
+      classId: json['class_id']?.toString() ?? json['classId']?.toString() ?? '',
       name: (json['name'] as String? ?? '').trim(),
       password: json['password'] as String? ?? '',
       grade: json['grade'] as String? ?? 'Class 10',
@@ -406,6 +425,7 @@ class PlayerProfile {
   /// Payload for POST /api/intro
   Map<String, dynamic> toIntroRequest() {
     final jsonMap = toJson()..remove('avatar_index');
+    jsonMap['class_id'] = effectiveClassId;
     if (id.isEmpty) jsonMap.remove('id');
     return jsonMap;
   }

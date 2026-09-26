@@ -62,8 +62,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
 
     try {
-      final queryParam = category.toUpperCase() == 'GLOBAL' ? '' : '?category=$category';
-      final res = await ApiService.get('/api/leaderboard$queryParam');
+      final res = await ApiService.getLeaderboard(category);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final rawList = data['leaderboard'] as List<dynamic>? ?? [];

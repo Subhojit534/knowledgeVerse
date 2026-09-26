@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:knowledgeverse/game/buildings/sample_building_data.dart';
 import 'package:knowledgeverse/game/managers/building_manager.dart';
 import 'package:knowledgeverse/game/ui/dialogs/battle_quiz_arena.dart';
-import 'package:knowledgeverse/game/ui/dialogs/building_learning_panel.dart';
 import 'package:knowledgeverse/game/ui/dialogs/lesson_book_view.dart';
 import 'package:knowledgeverse/game/ui/dialogs/lesson_launcher.dart';
 import 'package:knowledgeverse/game/ui/hud/game_hud.dart';

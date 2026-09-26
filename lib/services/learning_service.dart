@@ -6,6 +6,7 @@ import '../models/learning_models.dart';
 import '../models/player_profile.dart';
 import 'api_config.dart';
 import 'api_service.dart';
+import 'curriculum_seed_catalog.dart';
 
 /// Centralized service handling AI content fetching and ElevenLabs TTS integration.
 class LearningService {
@@ -50,8 +51,8 @@ class LearningService {
       debugPrint('❌ [LearningService]: Exception fetching AI content: $e');
     }
 
-    // Offline / fallback fallback path
-    final fallback = _createOfflineContent(request);
+    // Offline / fallback fallback path using comprehensive CurriculumSeedCatalog
+    final fallback = CurriculumSeedCatalog.getLearningContentFor(request);
     _cache[cacheKey] = fallback;
     return fallback;
   }
@@ -62,6 +63,7 @@ class LearningService {
     required String subject,
     required int correctAnswers,
     required int totalQuestions,
+    bool updateLocalProfile = true,
   }) async {
     try {
       final currentProfile = PlayerProfile.current;
@@ -89,34 +91,64 @@ class LearningService {
         debugPrint('✅ [LearningService]: Quiz submitted successfully! XP Earned: ${data['xp_earned']}');
 
         // Synchronize updated stats from backend with local PlayerProfile notifier
-        if (data['profile'] != null) {
-          final serverProfile = PlayerProfile.fromJson(data['profile'] as Map<String, dynamic>);
-          final updated = (currentProfile ?? const PlayerProfile()).copyWith(
-            xp: serverProfile.xp,
-            level: serverProfile.level,
-            coins: serverProfile.coins,
-          );
-          PlayerProfile.notifier.update(updated);
-          unawaited(updated.save());
-        } else if (data['new_xp'] != null) {
-          final newXp = (data['new_xp'] as num).toInt();
-          final newCoins = (data['new_coins'] as num?)?.toInt() ?? (currentProfile?.coins ?? 500);
-          final newLevel = (data['new_level'] as num?)?.toInt() ?? PlayerProfile.computeLevel(newXp);
-          final updated = (currentProfile ?? const PlayerProfile()).copyWith(
-            xp: newXp,
-            level: newLevel,
-            coins: newCoins,
-          );
-          PlayerProfile.notifier.update(updated);
-          unawaited(updated.save());
+        if (updateLocalProfile) {
+          if (data['profile'] != null) {
+            final serverProfile = PlayerProfile.fromJson(data['profile'] as Map<String, dynamic>);
+            final updated = (currentProfile ?? const PlayerProfile()).copyWith(
+              xp: serverProfile.xp,
+              level: serverProfile.level,
+              coins: serverProfile.coins,
+            );
+            PlayerProfile.notifier.update(updated);
+            unawaited(updated.save());
+          } else if (data['new_xp'] != null) {
+            final newXp = (data['new_xp'] as num).toInt();
+            final newCoins = (data['new_coins'] as num?)?.toInt() ?? (currentProfile?.coins ?? 500);
+            final newLevel = (data['new_level'] as num?)?.toInt() ?? PlayerProfile.computeLevel(newXp);
+            final updated = (currentProfile ?? const PlayerProfile()).copyWith(
+              xp: newXp,
+              level: newLevel,
+              coins: newCoins,
+            );
+            PlayerProfile.notifier.update(updated);
+            unawaited(updated.save());
+          }
         }
 
         return data;
+      } else {
+        debugPrint('⚠️ [LearningService]: Backend submit returned status ${response.statusCode}, applying offline profile progression.');
       }
     } catch (e) {
-      debugPrint('❌ [LearningService]: Exception submitting quiz result: $e');
+      debugPrint('⚠️ [LearningService]: Exception submitting quiz result: $e, applying offline profile progression.');
     }
-    return null;
+
+    // Local profile progression fallback
+    final current = PlayerProfile.current ?? const PlayerProfile();
+    final xpEarned = correctAnswers * 100;
+    final coinsEarned = correctAnswers * 10;
+    final updatedXp = current.xp + xpEarned;
+    final updatedCoins = current.coins + coinsEarned;
+    final updatedLevel = PlayerProfile.computeLevel(updatedXp);
+    final updated = current.copyWith(
+      xp: updatedXp,
+      level: updatedLevel,
+      coins: updatedCoins,
+    );
+    if (updateLocalProfile) {
+      PlayerProfile.notifier.update(updated);
+      unawaited(updated.save());
+    }
+
+    return {
+      'success': true,
+      'xp_earned': xpEarned,
+      'coins_earned': coinsEarned,
+      'new_xp': updatedXp,
+      'new_level': updatedLevel,
+      'new_coins': updatedCoins,
+      'profile': updated.toJson(),
+    };
   }
 
   /// Synthesizes speech for custom text (e.g., question reading, how-to-play tutorial).
@@ -144,7 +176,7 @@ class LearningService {
   }
 
   /// Generates offline default content if backend is completely offline.
-  static LearningContentResponse _createOfflineContent(LearningRequest req) {
+  static LearningContentResponse createFallbackContent(LearningRequest req) {
     final subj = req.subject.toLowerCase();
     final bId = req.buildingId.toLowerCase();
     final bName = req.buildingName;

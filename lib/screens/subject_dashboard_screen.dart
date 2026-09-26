@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../game/buildings/building_data.dart';
+import '../game/buildings/curriculum_buildings_catalog.dart';
+import '../game/ui/dialogs/battle_quiz_arena.dart';
+import '../game/ui/dialogs/lesson_book_view.dart';
+import '../models/player_profile.dart';
 
 /// "Mathematics Academy - Mobile Landscape" screen from Stitch.
 /// Serves as the District Dashboard view with ornate 16-bit RPG styling,
@@ -146,16 +151,7 @@ class SubjectDashboardScreen extends StatelessWidget {
                               icon: act['icon'] as IconData,
                               accentColor: act['color'] as Color,
                               imageUrl: act['imageUrl'] as String?,
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        '${act['title']} selected in $subjectName!'),
-                                    backgroundColor: const Color(0xFF6B13AF),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
+                              onTap: () => _onActivityTap(context, act['title'] as String),
                             );
                           },
                         ),
@@ -165,6 +161,111 @@ class SubjectDashboardScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onActivityTap(BuildContext context, String activityTitle) {
+    final profile = PlayerProfile.current ?? const PlayerProfile();
+    final grade = profile.grade.isNotEmpty ? profile.grade : 'Class 10';
+    final buildings = CurriculumBuildingsCatalog.getBuildingsFor(
+      subject: subjectName,
+      grade: grade,
+    );
+    final building = buildings.isNotEmpty
+        ? buildings.first
+        : BuildingData(
+            id: '${subjectName.toLowerCase()}_sanctum_01',
+            name: '$subjectName Sanctum',
+            icon: Icons.school_rounded,
+            sprite: 'assets/paper_ui/real_book_open.png',
+            level: 1,
+            subject: subjectName,
+            description: 'Master core curriculum theorems for $subjectName.',
+            unlocked: true,
+            lessonsAvailable: 6,
+            themeColor: themeColor,
+          );
+
+    if (activityTitle == 'Lessons' || activityTitle == 'Flashcards') {
+      showDialog(
+        context: context,
+        useSafeArea: false,
+        barrierDismissible: false,
+        builder: (ctx) => Scaffold(
+          backgroundColor: Colors.black54,
+          body: LessonBookView(
+            building: building,
+            onClose: () => Navigator.of(ctx).pop(),
+            onGoToQuiz: () {
+              Navigator.of(ctx).pop();
+              _openQuizArena(context, building);
+            },
+          ),
+        ),
+      );
+    } else if (activityTitle == 'Mock Tests' || activityTitle == 'Boss Challenges' || activityTitle == 'Quests' || activityTitle == 'Puzzles') {
+      _openQuizArena(context, building);
+    } else if (activityTitle == 'Progress') {
+      _showProgressDialog(context, profile);
+    }
+  }
+
+  void _openQuizArena(BuildContext context, BuildingData building) {
+    showDialog(
+      context: context,
+      useSafeArea: false,
+      barrierDismissible: false,
+      builder: (ctx) => Scaffold(
+        backgroundColor: Colors.black87,
+        body: BattleQuizArena(
+          building: building,
+          onClose: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
+  }
+
+  void _showProgressDialog(BuildContext context, PlayerProfile profile) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E32),
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: Color(0xFFF2CA50), width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: Text(
+          '$subjectName Progress',
+          style: GoogleFonts.spaceMono(
+            color: const Color(0xFFF2CA50),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Explorer: ${profile.name}', style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 8),
+            Text('Curriculum Grade: ${profile.grade}', style: const TextStyle(color: Colors.white70)),
+            Text('Active Board: ${profile.curriculum}', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: (profile.xp % 500) / 500,
+              backgroundColor: Colors.black38,
+              valueColor: AlwaysStoppedAnimation<Color>(themeColor),
+            ),
+            const SizedBox(height: 8),
+            Text('XP: ${profile.xp} | Level: ${profile.level}', style: const TextStyle(color: Color(0xFFF2CA50))),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close', style: TextStyle(color: Color(0xFFF2CA50))),
           ),
         ],
       ),

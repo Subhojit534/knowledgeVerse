@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:knowledgeverse/config/asset_paths.dart';
 import 'package:knowledgeverse/game/buildings/building_data.dart';
 import 'package:knowledgeverse/game/ui/dialogs/battle_quiz_arena.dart';
 import 'package:knowledgeverse/models/learning_models.dart';

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -41,11 +42,28 @@ class ApiConfig {
     _cachedBaseUrl = _defaultFallback;
   }
 
+  /// Allows overriding base URL in test environments or runtime.
+  static void setBaseUrl(String? url) {
+    _cachedBaseUrl = url;
+  }
+
   /// Returns the current backend base URL configured in `.env`.
   static String get baseUrl {
-    String url = _cachedBaseUrl ?? dotenv.env['API_BASE_URL']?.trim() ?? _defaultFallback;
+    String? envUrl;
+    if (dotenv.isInitialized) {
+      envUrl = dotenv.env['API_BASE_URL']?.trim();
+    }
+    String url = _cachedBaseUrl ?? envUrl ?? _defaultFallback;
     if (url.endsWith('/')) {
       url = url.substring(0, url.length - 1);
+    }
+    // Route to host machine from Android emulator
+    if (!kIsWeb && Platform.isAndroid) {
+      if (url.contains('127.0.0.1')) {
+        url = url.replaceAll('127.0.0.1', '10.0.2.2');
+      } else if (url.contains('localhost')) {
+        url = url.replaceAll('localhost', '10.0.2.2');
+      }
     }
     return url;
   }

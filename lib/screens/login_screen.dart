@@ -38,9 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final response = await ApiService.post(
-        '/api/auth/login',
-        body: {'name': name, 'password': password},
+      final response = await ApiService.loginExplorer(
+        name: name,
+        password: password,
       );
 
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;

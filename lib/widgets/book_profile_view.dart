@@ -91,11 +91,6 @@ class _BookProfileViewState extends State<BookProfileView>
     });
   }
 
-  void _replayAnimation() {
-    _controller.reset();
-    _controller.forward();
-  }
-
   @override
   Widget build(BuildContext context) {
     final profile = widget.profile ??

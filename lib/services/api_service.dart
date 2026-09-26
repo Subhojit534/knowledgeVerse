@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
+import 'curriculum_seed_catalog.dart';
 
 /// Centralized API HTTP Service for KnowledgeVerse.
 ///
@@ -184,6 +185,7 @@ class ApiService {
   static Future<http.Response> registerExplorer({
     required String name,
     required String password,
+    String? classId,
     String? grade,
     String? curriculum,
     String? difficulty,
@@ -191,13 +193,23 @@ class ApiService {
     String? learningGoal,
     List<String>? subjects,
   }) async {
+    final effectiveGrade = grade ?? 'Class 10';
+    final effectiveCurriculum = curriculum ?? 'CBSE';
+    final effectiveClassId = (classId != null && classId.isNotEmpty)
+        ? classId
+        : CurriculumSeedCatalog.findClassId(
+            grade: effectiveGrade,
+            board: effectiveCurriculum,
+          );
+
     return post(
       '/api/auth/register',
       body: {
         'name': name.trim(),
         'password': password,
-        'grade': grade ?? 'Class 10',
-        'curriculum': curriculum ?? 'CBSE',
+        'class_id': effectiveClassId,
+        'grade': effectiveGrade,
+        'curriculum': effectiveCurriculum,
         'difficulty': difficulty ?? 'Medium',
         'world_theme': worldTheme ?? 'Green Highlands',
         'learning_goal': learningGoal ?? 'Master all academic domains',
@@ -321,10 +333,358 @@ class ApiService {
   }
 
   // ===========================================================================
+  // CLASSES APIs (/api/classes)
+  // ===========================================================================
+
+  /// Fetch classes filtered by curriculum board (e.g. CBSE, ICSE, BSEB, WBBSE, DBSE)
+  static Future<http.Response> getClasses({String? board}) async {
+    final query = (board != null && board.trim().isNotEmpty)
+        ? '?board=${Uri.encodeComponent(board.trim().toUpperCase())}'
+        : '';
+    return get('/api/classes$query');
+  }
+
+  // ===========================================================================
+  // SOCIAL APIs (/api/social)
+  // ===========================================================================
+
+  /// Get comprehensive social dashboard data (friends, requests, explorers, guild overview)
+  static Future<http.Response> getSocialDashboard(String userId) async {
+    return get('/api/social/dashboard?userId=${Uri.encodeComponent(userId)}');
+  }
+
+  /// Get friends, incoming requests, sent requests, and discoverable explorers
+  static Future<http.Response> getFriends(String userId) async {
+    return get('/api/social/friends?userId=${Uri.encodeComponent(userId)}');
+  }
+
+  /// Send friend invitation
+  static Future<http.Response> sendFriendRequest({
+    required String requesterId,
+    required String addresseeId,
+  }) async {
+    return post(
+      '/api/social/friends/request',
+      body: {
+        'requesterId': requesterId,
+        'addresseeId': addresseeId,
+      },
+    );
+  }
+
+  /// Accept or decline a friend invitation
+  static Future<http.Response> respondFriendRequest({
+    required String friendshipId,
+    required bool accept,
+  }) async {
+    return post(
+      '/api/social/friends/respond',
+      body: {
+        'friendshipId': friendshipId,
+        'accept': accept,
+      },
+    );
+  }
+
+  /// Challenge a friend directly to a quiz duel
+  static Future<http.Response> challengeFriendDuel({
+    required String challengerId,
+    required String challengedId,
+    required String buildingId,
+    required String subject,
+    int stakeCoins = 50,
+  }) async {
+    return post(
+      '/api/social/duel/challenge',
+      body: {
+        'challengerId': challengerId,
+        'challengedId': challengedId,
+        'buildingId': buildingId,
+        'subject': subject,
+        'stakeCoins': stakeCoins,
+      },
+    );
+  }
+
+  // ===========================================================================
+  // GUILDS APIs (/api/guilds)
+  // ===========================================================================
+
+  /// Get public guild directory
+  static Future<http.Response> getPublicGuilds() async {
+    return get('/api/guilds');
+  }
+
+  /// Get player's active guild, roster, and chat feed
+  static Future<http.Response> getMyGuild(String userId) async {
+    return get('/api/guilds/my?userId=${Uri.encodeComponent(userId)}');
+  }
+
+  /// Create a new scholar guild
+  static Future<http.Response> createGuild({
+    required String leaderId,
+    required String name,
+    required String tag,
+    required String motto,
+  }) async {
+    return post(
+      '/api/guilds/create',
+      body: {
+        'leaderId': leaderId,
+        'name': name,
+        'tag': tag,
+        'motto': motto,
+      },
+    );
+  }
+
+  /// Join an existing guild
+  static Future<http.Response> joinGuild({
+    required String userId,
+    required String guildId,
+  }) async {
+    return post(
+      '/api/guilds/join',
+      body: {
+        'userId': userId,
+        'guildId': guildId,
+      },
+    );
+  }
+
+  /// Leave current guild
+  static Future<http.Response> leaveGuild({
+    required String userId,
+    required String guildId,
+  }) async {
+    return post(
+      '/api/guilds/leave',
+      body: {
+        'userId': userId,
+        'guildId': guildId,
+      },
+    );
+  }
+
+  /// Poll live chat messages for a guild
+  static Future<http.Response> getGuildMessages(String guildId) async {
+    return get('/api/guilds/messages?guildId=${Uri.encodeComponent(guildId)}');
+  }
+
+  /// Post a message to guild chat
+  static Future<http.Response> sendGuildMessage({
+    required String guildId,
+    required String senderId,
+    required String text,
+  }) async {
+    return post(
+      '/api/guilds/chat',
+      body: {
+        'guildId': guildId,
+        'senderId': senderId,
+        'text': text,
+      },
+    );
+  }
+
+  // ===========================================================================
+  // MULTIPLAYER PVP APIs (/api/pvp)
+  // ===========================================================================
+
+  /// Queue for PvP matchmaking or instant pairing
+  static Future<http.Response> matchmakePvP({
+    required String userId,
+    required String playerName,
+    required String subject,
+    int stakeCoins = 50,
+    bool isRanked = true,
+    String grade = 'Class 10',
+    String curriculum = 'CBSE',
+  }) async {
+    return post(
+      '/api/pvp/matchmake',
+      body: {
+        'userId': userId,
+        'playerName': playerName,
+        'subject': subject,
+        'stakeCoins': stakeCoins,
+        'isRanked': isRanked,
+        'grade': grade,
+        'curriculum': curriculum,
+      },
+    );
+  }
+
+  /// Cancel active matchmaking search
+  static Future<http.Response> cancelPvPMatchmaking(String userId) async {
+    return post(
+      '/api/pvp/matchmake/cancel',
+      body: {'userId': userId},
+    );
+  }
+
+  /// Create a private PvP duel room
+  static Future<http.Response> createPvPRoom({
+    required String userId,
+    required String playerName,
+    required String subject,
+    int stakeCoins = 50,
+    String grade = 'Class 10',
+    String curriculum = 'CBSE',
+  }) async {
+    return post(
+      '/api/pvp/room/create',
+      body: {
+        'userId': userId,
+        'playerName': playerName,
+        'subject': subject,
+        'stakeCoins': stakeCoins,
+        'grade': grade,
+        'curriculum': curriculum,
+      },
+    );
+  }
+
+  /// Join an existing private PvP duel room via 6-digit room code
+  static Future<http.Response> joinPvPRoom({
+    required String roomCode,
+    required String userId,
+    required String playerName,
+  }) async {
+    return post(
+      '/api/pvp/room/join',
+      body: {
+        'roomCode': roomCode.trim().toUpperCase(),
+        'userId': userId,
+        'playerName': playerName,
+      },
+    );
+  }
+
+  /// Check room readiness / status
+  static Future<http.Response> getPvPRoomStatus(String roomCode) async {
+    return get('/api/pvp/room/status/${Uri.encodeComponent(roomCode.trim().toUpperCase())}');
+  }
+
+  /// Cancel and dismantle an active duel room
+  static Future<http.Response> cancelPvPRoom({
+    required String roomCode,
+    required String userId,
+  }) async {
+    return post(
+      '/api/pvp/room/cancel',
+      body: {
+        'roomCode': roomCode.trim().toUpperCase(),
+        'userId': userId,
+      },
+    );
+  }
+
+  /// Retrieve current PvP match session state
+  static Future<http.Response> getPvPSession(String sessionId) async {
+    return get('/api/pvp/session/${Uri.encodeComponent(sessionId)}');
+  }
+
+  /// Submit answer for current battle round
+  static Future<http.Response> submitPvPRound({
+    required String sessionId,
+    required String userId,
+    required int roundIndex,
+    required int selectedIndex,
+    required int timeTakenMs,
+  }) async {
+    return post(
+      '/api/pvp/session/${Uri.encodeComponent(sessionId)}/round',
+      body: {
+        'user_id': userId,
+        'round_index': roundIndex,
+        'selected_index': selectedIndex,
+        'time_taken_ms': timeTakenMs,
+      },
+    );
+  }
+
+  /// Complete and conclude a PvP match session
+  static Future<http.Response> finishPvPSession(String sessionId) async {
+    return post('/api/pvp/session/${Uri.encodeComponent(sessionId)}/finish');
+  }
+
+  /// Send a direct PvP challenge to another player
+  static Future<http.Response> sendPvPChallenge({
+    required String challengerId,
+    required String challengedId,
+    required String subject,
+    int stakeCoins = 50,
+    String? challengerName,
+    String? challengedName,
+  }) async {
+    return post(
+      '/api/pvp/challenge',
+      body: {
+        'challengerId': challengerId,
+        'challengedId': challengedId,
+        'subject': subject,
+        'stakeCoins': stakeCoins,
+        if (challengerName != null) 'challengerName': challengerName,
+        if (challengedName != null) 'challengedName': challengedName,
+      },
+    );
+  }
+
+  /// Get list of incoming pending challenges
+  static Future<http.Response> getPendingPvPChallenges(String userId) async {
+    return get('/api/pvp/challenges?userId=${Uri.encodeComponent(userId)}');
+  }
+
+  /// Respond to a pending PvP challenge (accept/decline)
+  static Future<http.Response> respondToPvPChallenge({
+    required String challengeId,
+    required bool accept,
+    String grade = 'Class 10',
+    String curriculum = 'CBSE',
+    String subject = 'Mathematics',
+  }) async {
+    return post(
+      '/api/pvp/challenges/respond',
+      body: {
+        'challengeId': challengeId,
+        'accept': accept,
+        'grade': grade,
+        'curriculum': curriculum,
+        'subject': subject,
+      },
+    );
+  }
+
+  /// Consume an accepted challenge once both players launch the arena
+  static Future<http.Response> consumePvPChallenge({
+    required String challengeId,
+    required String sessionId,
+  }) async {
+    return post(
+      '/api/pvp/challenges/consume',
+      body: {
+        'challengeId': challengeId,
+        'sessionId': sessionId,
+      },
+    );
+  }
+
+  /// Get player's PvP duel combat statistics
+  static Future<http.Response> getPvPStats(String userId) async {
+    return get('/api/pvp/stats/${Uri.encodeComponent(userId)}');
+  }
+
+  /// Get PvP ranked duelist leaderboard
+  static Future<http.Response> getPvPLeaderboard() async {
+    return get('/api/pvp/leaderboard');
+  }
+
+  // ===========================================================================
   // LEADERBOARD APIs (/api/leaderboard)
   // ===========================================================================
 
-  /// Get leaderboard rankings
+  /// Get general leaderboard rankings
   static Future<http.Response> getLeaderboard([String category = 'GLOBAL']) async {
     final query = category.toUpperCase() == 'GLOBAL'
         ? ''
@@ -332,4 +692,5 @@ class ApiService {
     return get('/api/leaderboard$query');
   }
 }
+
 

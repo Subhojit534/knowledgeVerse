@@ -8,6 +8,7 @@ import '../models/learning_models.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_models.dart';
 import 'api_service.dart';
+import 'curriculum_seed_catalog.dart';
 
 /// Centralized client service for all PvP Duel Arena operations
 class PvPService {
@@ -608,7 +609,7 @@ class PvPService {
     PlayerProfile profile,
   ) {
     final rng = math.Random();
-    final questions = _getOfflineQuestions(subject);
+    final questions = _getOfflineQuestions(subject, profile.grade);
 
     final player = PvPCombatant(
       id: profile.id.isNotEmpty ? profile.id : 'player-1',
@@ -663,7 +664,19 @@ class PvPService {
     );
   }
 
-  static List<MCQuestion> _getOfflineQuestions(String subject) {
+  static List<MCQuestion> _getOfflineQuestions(String subject, [String? grade]) {
+    final seedTopics = CurriculumSeedCatalog.getTopicsFor(subject: subject, grade: grade);
+    if (seedTopics.isNotEmpty) {
+      final allQ = <MCQuestion>[];
+      for (final t in seedTopics) {
+        allQ.addAll(t.questions);
+      }
+      if (allQ.length >= 5) {
+        final shuffled = List<MCQuestion>.from(allQ)..shuffle();
+        return shuffled.take(5).toList();
+      }
+    }
+
     switch (subject.toLowerCase()) {
       case 'mathematics':
       case 'math':
