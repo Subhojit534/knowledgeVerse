@@ -77,5 +77,90 @@ void main() {
       final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       expect(data['success'], isTrue);
     });
+
+    test('saveUserProfile saves profile to database and retrieves it', () async {
+      final testProfile = {
+        'name': 'Test Explorer Integration',
+        'difficulty': 'Medium',
+        'grade': 'Class 10',
+        'curriculum': 'CBSE',
+        'avatar_id': '0',
+        'xp': 200,
+        'level': 1,
+        'coins': 550,
+      };
+      final res = await ApiService.saveUserProfile(testProfile);
+      expect(res.statusCode, equals(200));
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      expect(data['success'], isTrue);
+      expect(data['profile'], isNotNull);
+      final profileId = data['profile']['id'] as String;
+
+      final fetchRes = await ApiService.getProfileById(profileId);
+      expect(fetchRes.statusCode, equals(200));
+      final fetchData = jsonDecode(utf8.decode(fetchRes.bodyBytes)) as Map<String, dynamic>;
+      expect(fetchData['success'], isTrue);
+      expect(fetchData['profile']['id'], equals(profileId));
+    });
+
+    test('submitQuizScore updates student progress and awards rewards', () async {
+      final res = await ApiService.submitQuizScore({
+        'user_id': '15c6df36-622e-4597-bc38-46f96e83f715',
+        'building_id': 'code',
+        'subject': 'Computer Science',
+        'correct_answers': 4,
+        'total_questions': 4,
+        'difficulty': 'Medium',
+      });
+      expect(res.statusCode, equals(200));
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      expect(data['success'], isTrue);
+      expect(data['xp_earned'], isNotNull);
+      expect(data['coins_earned'], isNotNull);
+    });
+
+    test('getMyGuild and guild messaging interact with DB', () async {
+      final res = await ApiService.getMyGuild('15c6df36-622e-4597-bc38-46f96e83f715');
+      expect(res.statusCode, equals(200));
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      expect(data['success'], isTrue);
+
+      if (data['guild'] != null) {
+        final guildId = data['guild']['id'] as String;
+        final msgRes = await ApiService.sendGuildMessage(
+          guildId: guildId,
+          senderId: '15c6df36-622e-4597-bc38-46f96e83f715',
+          text: 'Integration test message',
+        );
+        expect(msgRes.statusCode, equals(200));
+
+        final listRes = await ApiService.getGuildMessages(guildId);
+        expect(listRes.statusCode, equals(200));
+        final listData = jsonDecode(utf8.decode(listRes.bodyBytes)) as Map<String, dynamic>;
+        expect(listData['success'], isTrue);
+      }
+    });
+
+    test('getInventory fetches player bag and equipment', () async {
+      final res = await ApiService.getInventory('15c6df36-622e-4597-bc38-46f96e83f715');
+      expect(res.statusCode, equals(200));
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      expect(data['success'], isTrue);
+      expect(data['inventory'], isA<List>());
+      expect(data['equipped'], isNotNull);
+    });
+
+    test('getPvPStats fetches duelist combat records', () async {
+      final res = await ApiService.getPvPStats('15c6df36-622e-4597-bc38-46f96e83f715');
+      expect(res.statusCode, equals(200));
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      expect(data['success'], isTrue);
+      expect(data['stats'], isNotNull);
+    });
   });
 }

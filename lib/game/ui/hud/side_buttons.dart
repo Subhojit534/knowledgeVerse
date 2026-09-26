@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../screens/inventory_screen.dart';
 import '../../../../screens/map_list_screen.dart';
 import '../../../services/theme_music_service.dart';
+import '../dialogs/ai_chatbot_dialog.dart';
 
-/// Reference-style stacked side buttons — District and Inventory on right edge.
+/// Reference-style stacked side buttons — District, Inventory, and AI Tutor on right edge.
 class SideButtonsWidget extends StatefulWidget {
   const SideButtonsWidget({super.key});
 
@@ -14,6 +15,7 @@ class SideButtonsWidget extends StatefulWidget {
 class _SideButtonsWidgetState extends State<SideButtonsWidget> {
   bool _districtHovered = false;
   bool _inventoryHovered = false;
+  bool _aiTutorHovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +56,19 @@ class _SideButtonsWidgetState extends State<SideButtonsWidget> {
               context,
               MaterialPageRoute(builder: (_) => const InventoryScreen()),
             );
+          },
+        ),
+        const SizedBox(height: 8),
+
+        // AI Tutor Button -> Opens Archmage Aetherius Groq Chatbot
+        _SideIconButton(
+          label: 'AI Tutor',
+          icon: Icons.auto_awesome,
+          color: const Color(0xFFCBA6F7),
+          isHovered: _aiTutorHovered,
+          onHoverChange: (v) => setState(() => _aiTutorHovered = v),
+          onTap: () {
+            AiChatbotDialog.show(context);
           },
         ),
       ],

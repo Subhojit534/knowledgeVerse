@@ -348,6 +348,20 @@ class ApiService {
     return post('/api/learning/tts', body: {'text': text});
   }
 
+  /// Send message and conversational history to AI Tutor powered by Groq (/api/learning/chat)
+  static Future<http.Response> chatWithTutor({
+    required String message,
+    List<Map<String, String>>? messages,
+    Map<String, dynamic>? studentContext,
+  }) async {
+    final body = <String, dynamic>{
+      'message': message,
+      if (messages != null) 'messages': messages,
+      if (studentContext != null) 'studentContext': studentContext,
+    };
+    return post('/api/learning/chat', body: body);
+  }
+
   // ===========================================================================
   // CLASSES APIs (/api/classes)
   // ===========================================================================

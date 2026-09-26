@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../game/buildings/building_data.dart';
 import '../game/buildings/curriculum_buildings_catalog.dart';
+import '../game/ui/dialogs/ai_chatbot_dialog.dart';
 import '../game/ui/dialogs/battle_quiz_arena.dart';
 import '../game/ui/dialogs/lesson_book_view.dart';
 import '../models/player_profile.dart';
@@ -63,6 +64,13 @@ class SubjectDashboardScreen extends StatelessWidget {
       'color': Color(0xFFFFB4AB),
       'imageUrl':
           'https://lh3.googleusercontent.com/aida-public/AB6AXuD_jwGIQFX-809NFTIzpyodpg-7koVnkBFhHoOPlOVREC91EjJl1Bar6PIe_8O7EJaVa3Uw5eCR3ZVzYNF2-qgyD__gBULHG3GFgwVHt1MFycqxBUy75T7Xnw5Q1wv5Rr_WwPkIFaiLTZ1BaG5Sp9kOZfv0Zhsr2ioiLOfKsDcPDSGwoepOIbhmLM26dTVIrl0Clg1dwtMmqvtH50kRQGlGSLf7NRr54O2uP20vOgjCeRpG98M2bl-rKh8bgtm5COga931-bmtG67k',
+    },
+    {
+      'title': 'AI Tutor',
+      'icon': Icons.auto_awesome_rounded,
+      'color': Color(0xFFCBA6F7),
+      'imageUrl':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuBOJM6AWyUlYPOJRorfaSSYokhg7YUfd8ztnJzwanpVriIY_jCkMUVogPOxtLdUR-YgFOMdPtIP12RIHFvvOk4cJgqZPjA0KEyI8esWfTCyw1b0YpuT-dkyBtGSryPu_Mx2vHij4vUT5flDNtqTmbK9Yk91bg69p8-SKC3n4jk8urCHr3SQpy7H1q6TpkudGZ3HvpPadgJqRcwBV41K1Xl81-aF3-tYs4J23FrTkzXh5cwUjBsIHmhxIFzsSZkq8ECBPdWnVM85fVE',
     },
     {
       'title': 'Progress',
@@ -208,6 +216,8 @@ class SubjectDashboardScreen extends StatelessWidget {
       );
     } else if (activityTitle == 'Mock Tests' || activityTitle == 'Boss Challenges' || activityTitle == 'Quests' || activityTitle == 'Puzzles') {
       _openQuizArena(context, building);
+    } else if (activityTitle == 'AI Tutor') {
+      AiChatbotDialog.show(context, subject: subjectName);
     } else if (activityTitle == 'Progress') {
       _showProgressDialog(context, profile);
     }
