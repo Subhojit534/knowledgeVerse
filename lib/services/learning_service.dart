@@ -77,6 +77,9 @@ class LearningService {
           'subject': subject,
           'correct_answers': correctAnswers,
           'total_questions': totalQuestions,
+          'difficulty': currentProfile?.difficulty.isNotEmpty == true
+              ? currentProfile!.difficulty
+              : 'Medium',
         },
         timeout: _timeout,
       );
@@ -84,6 +87,30 @@ class LearningService {
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         debugPrint('✅ [LearningService]: Quiz submitted successfully! XP Earned: ${data['xp_earned']}');
+
+        // Synchronize updated stats from backend with local PlayerProfile notifier
+        if (data['profile'] != null) {
+          final serverProfile = PlayerProfile.fromJson(data['profile'] as Map<String, dynamic>);
+          final updated = (currentProfile ?? const PlayerProfile()).copyWith(
+            xp: serverProfile.xp,
+            level: serverProfile.level,
+            coins: serverProfile.coins,
+          );
+          PlayerProfile.notifier.update(updated);
+          unawaited(updated.save());
+        } else if (data['new_xp'] != null) {
+          final newXp = (data['new_xp'] as num).toInt();
+          final newCoins = (data['new_coins'] as num?)?.toInt() ?? (currentProfile?.coins ?? 500);
+          final newLevel = (data['new_level'] as num?)?.toInt() ?? PlayerProfile.computeLevel(newXp);
+          final updated = (currentProfile ?? const PlayerProfile()).copyWith(
+            xp: newXp,
+            level: newLevel,
+            coins: newCoins,
+          );
+          PlayerProfile.notifier.update(updated);
+          unawaited(updated.save());
+        }
+
         return data;
       }
     } catch (e) {
@@ -97,7 +124,7 @@ class LearningService {
     if (text.trim().isEmpty) return null;
     try {
       final response = await ApiService.post(
-        '/api/tts',
+        '/api/learning/tts',
         body: {'text': text},
         timeout: const Duration(seconds: 12),
       );

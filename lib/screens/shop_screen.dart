@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
@@ -73,33 +74,65 @@ class _ShopScreenState extends State<ShopScreen> {
     }
 
     final currentProfile = _profile ?? PlayerProfile.current ?? const PlayerProfile();
-    final updatedProfile = currentProfile.withPurchasedItem(
-      itemId: item.id,
-      price: item.price,
-      currency: item.currency,
-    );
+    final targetUserId = (currentProfile.id.isNotEmpty)
+        ? currentProfile.id
+        : (currentProfile.name.isNotEmpty ? currentProfile.name : 'demo-user-123');
 
-    await updatedProfile.save();
+    bool backendSuccess = false;
+    try {
+      final res = await ApiService.purchaseShopItem(
+        userId: targetUserId,
+        itemId: item.id,
+      );
 
-    // Async notify backend DB
-    Future(() async {
-      try {
-        final targetUserId = updatedProfile.id.isNotEmpty ? updatedProfile.id : updatedProfile.name;
-        await ApiService.post('/api/shop/purchase', body: {
-          'userId': targetUserId,
-          'shopItemId': item.id,
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          backendSuccess = true;
+          if (data['profile'] != null) {
+            final serverProfile = PlayerProfile.fromJson(data['profile'] as Map<String, dynamic>);
+            final newOwned = List<String>.from(currentProfile.ownedItems);
+            if (!newOwned.contains(item.id)) newOwned.add(item.id);
+            final updated = currentProfile.copyWith(
+              coins: serverProfile.coins,
+              gems: serverProfile.gems,
+              ownedItems: newOwned,
+            );
+            await updated.save();
+            if (mounted) {
+              setState(() {
+                _profile = updated;
+                _playerCoins = updated.coins;
+                _playerGems = updated.gems;
+                _ownedItems = List<String>.from(updated.ownedItems);
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Shop Purchase Backend Notice]: $e');
+    }
+
+    // Fallback if backend is offline or returned an issue
+    if (!backendSuccess) {
+      final updatedProfile = currentProfile.withPurchasedItem(
+        itemId: item.id,
+        price: item.price,
+        currency: item.currency,
+      );
+      await updatedProfile.save();
+      if (mounted) {
+        setState(() {
+          _profile = updatedProfile;
+          _playerCoins = updatedProfile.coins;
+          _playerGems = updatedProfile.gems;
+          _ownedItems = List<String>.from(updatedProfile.ownedItems);
         });
-      } catch (_) {}
-    });
+      }
+    }
 
     if (mounted) {
-      setState(() {
-        _profile = updatedProfile;
-        _playerCoins = updatedProfile.coins;
-        _playerGems = updatedProfile.gems;
-        _ownedItems = List<String>.from(updatedProfile.ownedItems);
-      });
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

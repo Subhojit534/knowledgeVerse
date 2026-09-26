@@ -329,6 +329,15 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
 
     BuildingManager().addXp(widget.building.id, 100);
 
+    // Synchronize quiz completion with backend learning service
+    final totalQ = _content?.questions.length ?? 4;
+    unawaited(LearningService.submitQuizResult(
+      buildingId: widget.building.id,
+      subject: widget.building.subject,
+      correctAnswers: _score,
+      totalQuestions: totalQ,
+    ));
+
     if (mounted) {
       widget.onClose();
     }

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
+import '../services/api_service.dart';
 import '../services/intro_service.dart';
 import 'splash_screen.dart';
 import 'world_generation_screen.dart';
@@ -29,7 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final Set<int> _selectedDistrictIndices = {0};
   String _grade = 'Class 10';
   String _curriculum = 'CBSE';
-  String _difficulty = 'Balanced';
+  String _difficulty = 'Medium';
   bool _isSubmitting = false;
 
   static const List<String> _grades = [
@@ -52,17 +54,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const List<Map<String, String>> _difficulties = [
     {
-      'label': 'Gentle',
+      'label': 'Easy',
       'desc': 'Steady pace, extra guidance for the wary scholar.',
       'icon': '🌿',
     },
     {
-      'label': 'Balanced',
+      'label': 'Medium',
       'desc': 'A fair climb with real challenge for ambitious minds.',
       'icon': '⚖️',
     },
     {
-      'label': 'Challenging',
+      'label': 'Hard',
       'desc': 'Steep and fast, reserved for the truly legendary.',
       'icon': '⚔️',
     },
@@ -159,8 +161,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final profile = _buildProfile();
 
     try {
-      final intro = await IntroService.fetchIntro(profile);
-      final finalProfile = (intro.savedProfile ?? profile).copyWith(
+      // 1. Register explorer account on backend (/api/auth/register)
+      PlayerProfile registeredProfile = profile;
+      try {
+        final regRes = await ApiService.registerExplorer(
+          name: profile.name,
+          password: profile.password,
+          grade: profile.grade,
+          curriculum: profile.curriculum,
+          difficulty: profile.difficulty,
+          worldTheme: profile.worldTheme,
+          learningGoal: profile.learningGoal,
+          subjects: profile.subjects,
+        );
+
+        final regData = jsonDecode(utf8.decode(regRes.bodyBytes)) as Map<String, dynamic>;
+
+        if (regRes.statusCode == 400) {
+          final errorMsg = regData['error'] as String? ?? 'Registration failed. Name may already be taken!';
+          _showSnackBar(errorMsg);
+          setState(() {
+            _currentStep = 0; // Return to name step
+            _isSubmitting = false;
+          });
+          return;
+        }
+
+        if (regRes.statusCode == 200 && regData['profile'] != null) {
+          final serverProfile = PlayerProfile.fromJson(regData['profile'] as Map<String, dynamic>);
+          registeredProfile = serverProfile.copyWith(avatarIndex: profile.avatarIndex);
+        }
+      } catch (authErr) {
+        debugPrint('⚠️ [Onboarding Auth Register Warning]: $authErr');
+      }
+
+      // 2. Fetch cinematic intro narration
+      final intro = await IntroService.fetchIntro(registeredProfile);
+      final finalProfile = (intro.savedProfile ?? registeredProfile).copyWith(
         avatarIndex: profile.avatarIndex,
       );
       await finalProfile.save();

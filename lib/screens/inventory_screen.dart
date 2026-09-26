@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/player_profile.dart';
+import '../services/api_service.dart';
 import '../services/inventory_catalog.dart';
 import 'shop_screen.dart';
 
@@ -30,11 +32,48 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _loadInventory() async {
     final p = PlayerProfile.current ?? await PlayerProfile.load();
     final List<GameItem> resolved = [];
+    final targetUserId = (p != null && p.id.isNotEmpty)
+        ? p.id
+        : (p?.name.isNotEmpty == true ? p!.name : 'demo-user-123');
 
-    if (p != null) {
+    try {
+      final res = await ApiService.getInventory(targetUserId);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final rawInv = data['inventory'] as List<dynamic>? ?? [];
+
+        for (final entry in rawInv) {
+          final m = entry as Map<String, dynamic>;
+          final itemId = m['item_id']?.toString() ?? m['id']?.toString() ?? '';
+          final catalogItem = InventoryCatalog.getItemById(itemId);
+          if (catalogItem != null) {
+            resolved.add(catalogItem);
+          } else if (itemId.isNotEmpty) {
+            resolved.add(GameItem(
+              id: itemId,
+              name: m['item_name']?.toString() ?? 'Mystery Relic',
+              description: 'Acquired artifact from the Arcane Bazaar.',
+              price: 100,
+              currency: 'COINS',
+              category: (m['slot_type']?.toString().toUpperCase() ?? 'EQUIPMENT'),
+              rarity: (m['rarity']?.toString().toUpperCase() ?? 'COMMON'),
+              rarityColor: const Color(0xFF82C0A0),
+              icon: Icons.shield_rounded,
+              stats: '+5 Defense & Insight',
+              imagePath: m['asset_url']?.toString() ?? 'assets/paper_ui/equipment/shield.png',
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Inventory Load Backend Warning]: $e');
+    }
+
+    // Fallback to local owned items if backend is offline or empty
+    if (resolved.isEmpty && p != null) {
       for (final id in p.ownedItems) {
         final item = InventoryCatalog.getItemById(id);
-        if (item != null) {
+        if (item != null && !resolved.any((i) => i.id == item.id)) {
           resolved.add(item);
         }
       }
@@ -466,18 +505,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
           // Equip / Use Button
           InkWell(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${item.name.toUpperCase()} IS EQUIPPED!',
-                    style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
-                  ),
-                  backgroundColor: const Color(0xFF065F46),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onTap: () => _handleEquipOrUse(item),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
@@ -496,5 +524,78 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleEquipOrUse(GameItem item) async {
+    final targetUserId = (_profile != null && _profile!.id.isNotEmpty)
+        ? _profile!.id
+        : (_profile?.name.isNotEmpty == true ? _profile!.name : 'demo-user-123');
+
+    final isConsumable = item.category == 'CONSUMABLE';
+
+    try {
+      if (isConsumable) {
+        final res = await ApiService.useItem(userId: targetUserId, itemId: item.id);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          final msg = data['message'] as String? ?? 'Consumed ${item.name}!';
+          if (data['profile'] != null) {
+            final serverProfile = PlayerProfile.fromJson(data['profile'] as Map<String, dynamic>);
+            final updated = (_profile ?? const PlayerProfile()).copyWith(
+              energy: serverProfile.energy,
+            );
+            PlayerProfile.notifier.update(updated);
+            await updated.save();
+            if (mounted) setState(() => _profile = updated);
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(msg.toUpperCase(), style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+                backgroundColor: const Color(0xFF065F46),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          await _loadInventory();
+          return;
+        }
+      } else {
+        final res = await ApiService.equipItem(userId: targetUserId, itemId: item.id);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          final msg = data['message'] as String? ?? '${item.name} equipped successfully!';
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(msg.toUpperCase(), style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white)),
+                backgroundColor: const Color(0xFF065F46),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          await _loadInventory();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Inventory Action Error]: $e');
+    }
+
+    // Fallback notification if offline
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isConsumable
+                ? 'CONSUMED ${item.name.toUpperCase()}! RESTORED ENERGY.'
+                : '${item.name.toUpperCase()} IS EQUIPPED!',
+            style: GoogleFonts.pressStart2p(fontSize: 8, color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF065F46),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }

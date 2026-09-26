@@ -300,6 +300,13 @@ class PlayerProfile {
 
   bool isItemOwned(String itemId) => ownedItems.contains(itemId);
 
+  static bool _isValidUuid(String str) {
+    final uuidRegex = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
+    return uuidRegex.hasMatch(str.trim());
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -310,6 +317,7 @@ class PlayerProfile {
         'difficulty': difficulty,
         'world_theme': worldTheme,
         'learning_goal': learningGoal,
+        'avatar_id': avatarIndex.toString(),
         'avatar_index': avatarIndex,
         'xp': xp,
         'level': level,
@@ -325,12 +333,41 @@ class PlayerProfile {
         'owned_items': ownedItems,
       };
 
+  /// Prepares payload conforming strictly to backend /api/profile schema
+  Map<String, dynamic> toBackendJson() {
+    final map = <String, dynamic>{
+      'name': name.trim(),
+      'avatar_id': avatarIndex.toString(),
+      'difficulty': difficulty.isNotEmpty ? difficulty : 'Medium',
+      'xp': xp,
+      'level': level,
+      'coins': coins,
+      'gems': gems,
+      'energy': energy,
+      'streak_days': streakDays,
+    };
+    if (id.isNotEmpty && _isValidUuid(id)) {
+      map['id'] = id.trim();
+    }
+    if (password.isNotEmpty) {
+      map['password'] = password;
+    }
+    return map;
+  }
+
   factory PlayerProfile.fromJson(Map<String, dynamic> json) {
-    final rawXp = json['xp'] as int? ?? 150;
-    final computedLvl = json['level'] as int? ?? computeLevel(rawXp);
+    final rawXp = (json['xp'] as num?)?.toInt() ?? 150;
+    final computedLvl = (json['level'] as num?)?.toInt() ?? computeLevel(rawXp);
+
+    int parsedAvatar = 0;
+    if (json['avatar_index'] != null && json['avatar_index'] is num) {
+      parsedAvatar = (json['avatar_index'] as num).toInt();
+    } else if (json['avatar_id'] != null) {
+      parsedAvatar = int.tryParse(json['avatar_id'].toString()) ?? 0;
+    }
 
     return PlayerProfile(
-      id: json['id'] as String? ?? '',
+      id: json['id']?.toString() ?? '',
       name: (json['name'] as String? ?? '').trim(),
       password: json['password'] as String? ?? '',
       grade: json['grade'] as String? ?? 'Class 10',
@@ -338,29 +375,27 @@ class PlayerProfile {
       subjects:
           (json['subjects'] as List?)?.map((e) => e.toString()).toList() ??
               ['Mathematics', 'Computer Science'],
-      difficulty: json['difficulty'] as String? ?? 'Balanced',
+      difficulty: json['difficulty'] as String? ?? 'Medium',
       worldTheme: json['world_theme'] as String? ??
           json['worldTheme'] as String? ??
           'Green Highlands',
       learningGoal: json['learning_goal'] as String? ??
           json['learningGoal'] as String? ??
           'Civilization Architect',
-      avatarIndex: json['avatar_index'] as int? ??
-          json['avatarIndex'] as int? ??
-          0,
+      avatarIndex: parsedAvatar,
       xp: rawXp,
       level: computedLvl,
-      focusXp: json['focus_xp'] as int? ?? rawXp,
-      coins: json['coins'] as int? ?? 500,
-      gems: json['gems'] as int? ?? 25,
-      energy: json['energy'] as int? ?? 100,
-      streakDays: json['streak_days'] as int? ??
-          json['streakDays'] as int? ??
+      focusXp: (json['focus_xp'] as num?)?.toInt() ?? rawXp,
+      coins: (json['coins'] as num?)?.toInt() ?? 500,
+      gems: (json['gems'] as num?)?.toInt() ?? 25,
+      energy: (json['energy'] as num?)?.toInt() ?? 100,
+      streakDays: (json['streak_days'] as num?)?.toInt() ??
+          (json['streakDays'] as num?)?.toInt() ??
           1,
       lastLoginDate: json['last_login_date'] as String? ?? '',
-      weeklyQuestions: json['weekly_questions'] as int? ?? 12,
-      weeklyMinutes: json['weekly_minutes'] as int? ?? 45,
-      lastEnergyUpdate: json['last_energy_update'] as int? ?? 0,
+      weeklyQuestions: (json['weekly_questions'] as num?)?.toInt() ?? 12,
+      weeklyMinutes: (json['weekly_minutes'] as num?)?.toInt() ?? 45,
+      lastEnergyUpdate: (json['last_energy_update'] as num?)?.toInt() ?? 0,
       ownedItems: (json['owned_items'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -397,13 +432,25 @@ class PlayerProfile {
   }
 
   void _syncWithDb() {
-    final targetId = id.isNotEmpty ? id : name;
-    if (targetId.isEmpty) return;
+    if (name.isEmpty) return;
 
     Future(() async {
       try {
-        final res = await ApiService.put('/api/profile/me?userId=$targetId', body: toJson());
+        final payload = toBackendJson();
+        final res = await ApiService.saveUserProfile(payload);
         if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          final p = data['profile'] as Map<String, dynamic>?;
+          if (p != null && p['id'] != null) {
+            final serverUuid = p['id'].toString();
+            if (id != serverUuid && _isValidUuid(serverUuid)) {
+              final updated = copyWith(id: serverUuid);
+              current = updated;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString(_prefsKey, jsonEncode(updated.toJson()));
+              await prefs.setString(userIdKey, serverUuid);
+            }
+          }
           debugPrint('☁️ [PlayerProfile DB Sync]: Successfully synchronized profile with DB');
         }
       } catch (err) {
@@ -499,35 +546,56 @@ class PlayerProfile {
 
 
   static void _fetchServerProfile(PlayerProfile localProfile) {
-    final targetId = localProfile.id.isNotEmpty ? localProfile.id : localProfile.name;
-    if (targetId.isEmpty) return;
-
     Future(() async {
       try {
-        final res = await ApiService.get('/api/profile/me?userId=$targetId');
-        if (res.statusCode == 200) {
-          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-          final p = data['profile'] as Map<String, dynamic>?;
-          if (p != null) {
-            final serverXp = p['xp'] as int? ?? 0;
-            final serverCoins = p['coins'] as int? ?? 0;
-            final serverGems = p['gems'] as int? ?? 0;
-
-            final maxXp = math.max(localProfile.xp, serverXp);
-            final maxCoins = math.max(localProfile.coins, serverCoins);
-            final maxGems = math.max(localProfile.gems, serverGems);
-
-            final merged = localProfile.copyWith(
-              xp: maxXp,
-              level: computeLevel(maxXp),
-              coins: maxCoins,
-              gems: maxGems,
-              energy: p['energy'] as int? ?? localProfile.energy,
-              streakDays: p['streak_days'] as int? ?? localProfile.streakDays,
-            );
-            current = merged;
-            notifier.update(merged);
+        Map<String, dynamic>? p;
+        if (localProfile.id.isNotEmpty && _isValidUuid(localProfile.id)) {
+          final res = await ApiService.getProfileById(localProfile.id);
+          if (res.statusCode == 200) {
+            final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+            p = data['profile'] as Map<String, dynamic>?;
           }
+        } else if (localProfile.name.isNotEmpty) {
+          // If local ID is not yet a UUID, lookup user in backend database
+          final res = await ApiService.getAllProfiles();
+          if (res.statusCode == 200) {
+            final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+            final list = data['profiles'] as List<dynamic>? ?? [];
+            final cleanName = localProfile.name.trim().toLowerCase();
+            final cleanUser = cleanName.replaceAll(RegExp(r'\s+'), '');
+            for (final item in list) {
+              final m = item as Map<String, dynamic>;
+              final mName = (m['name'] as String? ?? '').trim().toLowerCase();
+              final mUser = (m['username'] as String? ?? '').trim().toLowerCase();
+              if (mName == cleanName || mUser == cleanUser) {
+                p = m;
+                break;
+              }
+            }
+          }
+        }
+
+        if (p != null) {
+          final serverId = p['id']?.toString() ?? localProfile.id;
+          final serverXp = (p['xp'] as num?)?.toInt() ?? 0;
+          final serverCoins = (p['coins'] as num?)?.toInt() ?? 0;
+          final serverGems = (p['gems'] as num?)?.toInt() ?? 0;
+
+          final maxXp = math.max(localProfile.xp, serverXp);
+          final maxCoins = math.max(localProfile.coins, serverCoins);
+          final maxGems = math.max(localProfile.gems, serverGems);
+
+          final merged = localProfile.copyWith(
+            id: serverId.isNotEmpty ? serverId : localProfile.id,
+            xp: maxXp,
+            level: computeLevel(maxXp),
+            coins: maxCoins,
+            gems: maxGems,
+            energy: (p['energy'] as num?)?.toInt() ?? localProfile.energy,
+            streakDays: (p['streak_days'] as num?)?.toInt() ?? localProfile.streakDays,
+          );
+          current = merged;
+          notifier.update(merged);
         }
       } catch (_) {}
     });

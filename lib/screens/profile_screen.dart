@@ -165,42 +165,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final targetUserId = (active != null && active.id.isNotEmpty)
           ? active.id
-          : (localName != null && localName.isNotEmpty)
-              ? localName
-              : '';
-      final endpoint = targetUserId.isNotEmpty
-          ? '/api/profile/me?userId=$targetUserId'
-          : '/api/profile/me';
+          : '';
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
 
-      final res = await ApiService.get(endpoint);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-        final p = data['profile'] as Map<String, dynamic>?;
-        if (p != null && mounted) {
-          final serverName = (p['name'] as String?)?.trim();
-          final serverXp = p['xp'] as int? ?? _xp;
-          final serverCoins = p['coins'] as int? ?? _coins;
-          final serverLevel = p['level'] as int? ?? PlayerProfile.computeLevel(serverXp);
-
-          setState(() {
-            if (serverName != null && serverName.isNotEmpty) {
-              _playerName = serverName.toUpperCase();
-            }
-            if ((p['learning_goal'] as String?)?.isNotEmpty == true) {
-              _playerTitle = p['learning_goal'] as String;
-            }
-            _xp = serverXp;
-            _level = serverLevel;
-            _coins = serverCoins;
-            _profile = _profile.copyWith(
-              xp: _xp,
-              level: _level,
-              coins: _coins,
-            );
-          });
-
-          await _profile.save();
+      Map<String, dynamic>? p;
+      if (targetUserId.isNotEmpty && uuidRegex.hasMatch(targetUserId)) {
+        final res = await ApiService.getProfileById(targetUserId);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          p = data['profile'] as Map<String, dynamic>?;
         }
+      } else if (localName != null && localName.isNotEmpty) {
+        final res = await ApiService.getAllProfiles();
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+          final list = data['profiles'] as List<dynamic>? ?? [];
+          final clean = localName.trim().toLowerCase();
+          for (final item in list) {
+            final m = item as Map<String, dynamic>;
+            final mName = (m['name'] as String? ?? '').trim().toLowerCase();
+            final mUser = (m['username'] as String? ?? '').trim().toLowerCase();
+            if (mName == clean || mUser == clean.replaceAll(RegExp(r'\s+'), '')) {
+              p = m;
+              break;
+            }
+          }
+        }
+      }
+
+      if (p != null && mounted) {
+        final profileMap = p;
+        final serverName = (profileMap['name'] as String?)?.trim();
+        final serverXp = (profileMap['xp'] as num?)?.toInt() ?? _xp;
+        final serverCoins = (profileMap['coins'] as num?)?.toInt() ?? _coins;
+        final serverLevel = (profileMap['level'] as num?)?.toInt() ?? PlayerProfile.computeLevel(serverXp);
+
+        setState(() {
+          if (serverName != null && serverName.isNotEmpty) {
+            _playerName = serverName.toUpperCase();
+          }
+          if ((profileMap['learning_goal'] as String?)?.isNotEmpty == true) {
+            _playerTitle = profileMap['learning_goal'] as String;
+          }
+          _xp = serverXp;
+          _level = serverLevel;
+          _coins = serverCoins;
+          _profile = _profile.copyWith(
+            id: profileMap['id']?.toString() ?? _profile.id,
+            xp: _xp,
+            level: _level,
+            coins: _coins,
+          );
+        });
+
+        await _profile.save();
       }
     } catch (_) {}
   }
