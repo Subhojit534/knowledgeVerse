@@ -6,6 +6,8 @@ class LearningRequest {
   final String difficulty;
   final int studentLevel;
   final String? topic;
+  final String? topicId;
+  final String? subtopicId;
   final String? grade;
   final String? curriculum;
 
@@ -16,6 +18,8 @@ class LearningRequest {
     this.difficulty = 'Intermediate',
     this.studentLevel = 1,
     this.topic,
+    this.topicId,
+    this.subtopicId,
     this.grade,
     this.curriculum,
   });
@@ -27,6 +31,8 @@ class LearningRequest {
         'difficulty': difficulty,
         'student_level': studentLevel,
         if (topic != null && topic!.isNotEmpty) 'topic': topic,
+        if (topicId != null && topicId!.isNotEmpty) 'topic_id': topicId,
+        if (subtopicId != null && subtopicId!.isNotEmpty) 'subtopic_id': subtopicId,
         if (grade != null && grade!.isNotEmpty) 'grade': grade,
         if (curriculum != null && curriculum!.isNotEmpty) 'curriculum': curriculum,
       };
@@ -50,47 +56,77 @@ class MCQuestion {
 
   factory MCQuestion.fromJson(Map<String, dynamic> json) {
     final List<dynamic> rawOpts = json['options'] as List<dynamic>? ?? [];
-    final opts = rawOpts.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
-    
-    // Ensure 4 options
-    while (opts.length < 4) {
-      opts.add('Option ${opts.length + 1}');
+    final List<String> opts = [];
+    int parsedCorrectIndex = -1;
+
+    for (int i = 0; i < rawOpts.length; i++) {
+      final opt = rawOpts[i];
+      if (opt is Map<String, dynamic>) {
+        final text = opt['answer']?.toString() ?? opt['text']?.toString() ?? opt.toString();
+        opts.add(text.trim());
+        if (opt['is_correct'] == true) {
+          parsedCorrectIndex = i;
+        }
+      } else {
+        opts.add(opt.toString().trim());
+      }
     }
 
-    int parsedCorrectIndex = 0;
-    final rawCorrect = json['correct_index'] ?? json['correctIndex'];
-    if (rawCorrect is num) {
-      parsedCorrectIndex = rawCorrect.toInt();
-    } else if (rawCorrect is String) {
-      final upper = rawCorrect.trim().toUpperCase();
-      if (upper == 'A') {
-        parsedCorrectIndex = 0;
-      } else if (upper == 'B') {
-        parsedCorrectIndex = 1;
-      } else if (upper == 'C') {
-        parsedCorrectIndex = 2;
-      } else if (upper == 'D') {
-        parsedCorrectIndex = 3;
-      } else {
-        parsedCorrectIndex = int.tryParse(upper) ?? 0;
+    final cleanOpts = opts.where((s) => s.isNotEmpty).toList();
+    while (cleanOpts.length < 4) {
+      cleanOpts.add('Alternative Option ${cleanOpts.length + 1}');
+    }
+
+    if (parsedCorrectIndex == -1) {
+      final rawCorrect = json['correct_index'] ?? json['correctIndex'];
+      if (rawCorrect is num) {
+        parsedCorrectIndex = rawCorrect.toInt();
+      } else if (rawCorrect is String) {
+        final upper = rawCorrect.trim().toUpperCase();
+        if (upper == 'A') {
+          parsedCorrectIndex = 0;
+        } else if (upper == 'B') {
+          parsedCorrectIndex = 1;
+        } else if (upper == 'C') {
+          parsedCorrectIndex = 2;
+        } else if (upper == 'D') {
+          parsedCorrectIndex = 3;
+        } else {
+          parsedCorrectIndex = int.tryParse(upper) ?? 0;
+        }
       }
     }
 
     // If correct_answer_text was supplied in JSON, verify exact match
     final rawAnswerText = json['correct_answer_text']?.toString().trim();
     if (rawAnswerText != null && rawAnswerText.isNotEmpty) {
-      final matchIdx = opts.indexWhere((opt) => opt.toLowerCase() == rawAnswerText.toLowerCase());
+      final matchIdx = cleanOpts.indexWhere((opt) => opt.toLowerCase() == rawAnswerText.toLowerCase());
       if (matchIdx >= 0) {
         parsedCorrectIndex = matchIdx;
       }
     }
 
+    if (parsedCorrectIndex < 0 || parsedCorrectIndex >= cleanOpts.length) {
+      parsedCorrectIndex = 0;
+    }
+
+    int parsedId = 1;
+    final rawId = json['id'];
+    if (rawId is num) {
+      parsedId = rawId.toInt();
+    } else if (rawId is String) {
+      parsedId = rawId.hashCode.abs();
+    }
+
     return MCQuestion(
-      id: (json['id'] as num?)?.toInt() ?? 1,
+      id: parsedId,
       question: json['question']?.toString() ?? '',
-      options: opts.sublist(0, 4),
+      options: cleanOpts.sublist(0, 4),
       correctIndex: parsedCorrectIndex.clamp(0, 3),
-      explanation: json['explanation']?.toString() ?? 'Correct principle applied.',
+      explanation: json['explanation']?.toString() ??
+          (cleanOpts.isNotEmpty
+              ? 'Correct answer is ${cleanOpts[parsedCorrectIndex.clamp(0, cleanOpts.length - 1)]}.'
+              : 'Correct principle applied.'),
     );
   }
 }
@@ -121,7 +157,15 @@ class LearningContentResponse {
     required this.cacheKey,
   });
 
-  factory LearningContentResponse.fromJson(Map<String, dynamic> json, String baseUrl) {
+  factory LearningContentResponse.fromJson(
+    Map<String, dynamic> json,
+    String baseUrl, {
+    String? buildingId,
+    String? buildingName,
+    String? subject,
+    String? topic,
+    String? explanation,
+  }) {
     final rawAudio = json['explanation_audio_url'] as String?;
     final fullAudioUrl = (rawAudio != null && rawAudio.isNotEmpty)
         ? (rawAudio.startsWith('http') ? rawAudio : '$baseUrl$rawAudio')
@@ -133,11 +177,11 @@ class LearningContentResponse {
         .toList();
 
     return LearningContentResponse(
-      buildingId: json['building_id'] as String? ?? '',
-      buildingName: json['building_name'] as String? ?? '',
-      subject: json['subject'] as String? ?? '',
-      topic: json['topic'] as String? ?? 'Subject Fundamentals',
-      explanation: json['explanation'] as String? ?? '',
+      buildingId: json['building_id'] as String? ?? buildingId ?? '',
+      buildingName: json['building_name'] as String? ?? buildingName ?? '',
+      subject: json['subject'] as String? ?? subject ?? '',
+      topic: json['topic'] as String? ?? topic ?? 'Subject Fundamentals',
+      explanation: json['explanation'] as String? ?? explanation ?? '',
       questions: questions,
       explanationAudioUrl: fullAudioUrl,
       audioAvailable: json['audio_available'] as bool? ?? false,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/learning_models.dart';
 import '../../../models/player_profile.dart';
+import '../../../services/curriculum_seed_catalog.dart';
 import '../../../services/learning_service.dart';
 import '../../../services/mobile_tts_service.dart';
 import '../../buildings/building_data.dart';
@@ -57,9 +58,13 @@ class _LessonBookViewState extends State<LessonBookView>
 
   int get _maxSpread => 2; // Spread 0: Pages 1 & 2, Spread 1: Pages 3 & 4, Spread 2: Pages 5 & 6
 
-  bool _isLoading = true;
   LearningContentResponse? _content;
-  String? _errorMessage;
+
+  // Curriculum topics and subtopics for this building & grade
+  List<SeedTopic> _availableTopics = [];
+  SeedTopic? _selectedTopic;
+  SeedSubtopic? _selectedSubtopic;
+  String? _attunedMessage;
 
   // Audio Playback
   bool _isPlayingAudio = false;
@@ -99,12 +104,58 @@ class _LessonBookViewState extends State<LessonBookView>
 
     MobileTtsService.instance.addListener(_onTtsStateChanged);
 
+    // Initialize topics and subtopics from the backend curriculum catalog
+    _initTopics();
+
     // Automatically trigger book opening
     _coverController.forward().then((_) {
       if (mounted) setState(() => _isOpen = true);
     });
 
     _fetchLessonContent();
+  }
+
+  void _initTopics() {
+    final profile = PlayerProfile.current ?? const PlayerProfile();
+    final grade = profile.grade.isNotEmpty ? profile.grade : 'Class 10';
+    _availableTopics = CurriculumSeedCatalog.getTopicsFor(
+      subject: widget.building.subject,
+      grade: grade,
+    );
+    if (_availableTopics.isEmpty) {
+      _availableTopics = CurriculumSeedCatalog.topics
+          .where((t) =>
+              t.subject.toLowerCase().contains(widget.building.subject.toLowerCase()) ||
+              widget.building.subject.toLowerCase().contains(t.subject.toLowerCase()))
+          .toList();
+    }
+    if (_availableTopics.isEmpty) {
+      _availableTopics = CurriculumSeedCatalog.topics.take(6).toList();
+    }
+
+    final activeTopId = widget.building.activeTopicId ?? profile.activeTopicId;
+    if (activeTopId != null && activeTopId.isNotEmpty) {
+      for (final t in _availableTopics) {
+        if (t.id == activeTopId) {
+          _selectedTopic = t;
+          break;
+        }
+      }
+    }
+    _selectedTopic ??= _availableTopics.isNotEmpty ? _availableTopics.first : null;
+
+    final activeSubId = widget.building.activeSubtopicId ?? profile.activeSubtopicId;
+    if (_selectedTopic != null && _selectedTopic!.subtopics.isNotEmpty) {
+      if (activeSubId != null && activeSubId.isNotEmpty) {
+        for (final s in _selectedTopic!.subtopics) {
+          if (s.id == activeSubId) {
+            _selectedSubtopic = s;
+            break;
+          }
+        }
+      }
+      _selectedSubtopic ??= _selectedTopic!.subtopics.first;
+    }
   }
 
   @override
@@ -132,11 +183,13 @@ class _LessonBookViewState extends State<LessonBookView>
         buildingId: widget.building.id,
         buildingName: widget.building.name,
         subject: widget.building.subject,
-        difficulty: 'Intermediate',
+        difficulty: _selectedSubtopic?.difficulty ?? 'Intermediate',
         studentLevel: widget.building.level,
         grade: profile.grade.isNotEmpty ? profile.grade : 'Class 10',
         curriculum: profile.curriculum.isNotEmpty ? profile.curriculum : 'CBSE',
-        topic: widget.building.name,
+        topic: _selectedTopic?.name ?? widget.building.name,
+        topicId: _selectedTopic?.id,
+        subtopicId: _selectedSubtopic?.id,
       );
 
       final response = await LearningService.fetchLearningContent(req);
@@ -144,16 +197,10 @@ class _LessonBookViewState extends State<LessonBookView>
       if (mounted) {
         setState(() {
           _content = response;
-          _isLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = "Failed to transcribe lesson from the Ancient Library.";
-          _isLoading = false;
-        });
-      }
+      // Fallback content remains available
     }
   }
 
@@ -271,22 +318,6 @@ class _LessonBookViewState extends State<LessonBookView>
     return 'assets/images/island_math.png';
   }
 
-  String _getSubjectArtifact() {
-    final s = '${widget.building.subject} ${widget.building.name}'.toLowerCase();
-    if (s.contains('chem') || s.contains('potion') || s.contains('alchem')) {
-      return 'assets/images/pixel_potion.jpg';
-    }
-    if (s.contains('phys') || s.contains('sci') || s.contains('astro') || s.contains('magic')) {
-      return 'assets/images/pixel_wand.jpg';
-    }
-    if (s.contains('arena') || s.contains('hist') || s.contains('shield') || s.contains('war')) {
-      return 'assets/images/pixel_shield.jpg';
-    }
-    if (s.contains('gem') || s.contains('cryst') || s.contains('opt')) {
-      return 'assets/images/pixel_gem.jpg';
-    }
-    return 'assets/images/pixel_scroll.jpg';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1090,11 +1121,13 @@ class _LessonBookViewState extends State<LessonBookView>
     );
   }
 
-  // ── PAGE 3 (Left): WORKED EXAMPLES & ARTIFACT SCHEMATIC ─────────────────────
+  // ── PAGE 3 (Left): CODEX TOPICS MAP & CHAPTER INDEX ───────────────────────
   Widget _buildPage3Left() {
-    final topic = _content?.topic ?? widget.building.name;
+    final profile = PlayerProfile.current ?? const PlayerProfile();
+    final gradeLabel = profile.grade.isNotEmpty ? profile.grade : 'Class 10';
+    final boardLabel = profile.curriculum.isNotEmpty ? profile.curriculum : 'CBSE';
     final page3Text =
-        'Section 3: Applied Knowledge for $topic. Step-by-step resolution of real problems and structural equations.';
+        'Section 3: Curriculum Topics Map for ${widget.building.subject}. Select a curriculum chapter to inspect subtopic spells and mastery challenges.';
 
     return _buildParchmentPage(
       isLeft: true,
@@ -1106,109 +1139,220 @@ class _LessonBookViewState extends State<LessonBookView>
           _buildPageHeader(
             isLeft: true,
             pageNumber: 3,
-            title: 'APPLIED KNOWLEDGE',
-            subtitle: 'WORKED BREAKDOWN',
+            title: 'CODEX TOPICS MAP',
+            subtitle: widget.building.subject.toUpperCase(),
             pageText: page3Text,
-          ),
-          const SizedBox(height: 10),
-
-          const Text(
-            'STEP-BY-STEP RESOLUTION',
-            style: TextStyle(
-              fontFamily: 'serif',
-              fontSize: 18.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
-              color: Color(0xFF7A1C2E),
-            ),
           ),
           const SizedBox(height: 6),
 
-          Text(
-            'When ancient architects constructed the towers of Hexafalls, they relied on $topic to compute stresses and harmonic balances.',
-            style: const TextStyle(
-              fontFamily: 'serif',
-              fontSize: 16.5,
-              height: 1.45,
-              color: Color(0xFF2C2422),
-            ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+          // Board & Grade Pill Banner
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7A1C2E).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF7A1C2E).withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '$gradeLabel • $boardLabel'.toUpperCase(),
+                  style: const TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                    color: Color(0xFF7A1C2E),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_availableTopics.length} Curriculum Chapters',
+                  style: const TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 12.5,
+                    fontStyle: FontStyle.italic,
+                    color: Color(0xFF5A4B48),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 6),
 
-          const SizedBox(height: 10),
+          // Scrollable List of Topics
+          Expanded(
+            child: ListView.separated(
+              itemCount: _availableTopics.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (context, idx) {
+                final topic = _availableTopics[idx];
+                final isSelected = _selectedTopic?.id == topic.id;
 
-          _buildStepCard('Step 1: Identify Key Quantities', 'Isolate known constants and identify primary dependent variables.'),
-          _buildStepCard('Step 2: Apply Governing Law', 'Set up the fundamental relationship ensuring both sides remain balanced.'),
-          _buildStepCard('Step 3: Conclude & Verify', 'Check constraints against physical realities and confirm the solution.'),
-
-          const SizedBox(height: 10),
-
-          // Artifact Schematic Plate
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2EADC),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFC5A059), width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 6,
-                  offset: const Offset(1, 2),
-                ),
-              ],
+                return InkWell(
+                  key: Key('topic_card_${topic.id}'),
+                  onTap: () {
+                    setState(() {
+                      _selectedTopic = topic;
+                      if (topic.subtopics.isNotEmpty) {
+                        _selectedSubtopic = topic.subtopics.first;
+                      } else {
+                        _selectedSubtopic = null;
+                      }
+                      _attunedMessage = null;
+                    });
+                    _fetchLessonContent();
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFFF7EBD4) : const Color(0xFFFBF6EC),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF7A1C2E) : const Color(0xFFD4AF37).withValues(alpha: 0.5),
+                        width: isSelected ? 1.8 : 1.0,
+                      ),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: const Color(0xFF7A1C2E).withValues(alpha: 0.12),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              isSelected ? Icons.bookmark_added_rounded : Icons.bookmark_border_rounded,
+                              size: 16,
+                              color: isSelected ? const Color(0xFF7A1C2E) : const Color(0xFFC5A059),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                topic.name,
+                                style: TextStyle(
+                                  fontFamily: 'serif',
+                                  fontSize: 14.5,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  color: isSelected ? const Color(0xFF7A1C2E) : const Color(0xFF2C2422),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF7A1C2E),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'ACTIVE',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFF2CA50),
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            // Topic UUID Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2C2422),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                'ID: ${topic.id.length > 18 ? "${topic.id.substring(0, 8)}...${topic.id.substring(topic.id.length - 4)}" : topic.id}',
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 9.0,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFF2CA50),
+                                ),
+                              ),
+                            ),
+                            // Difficulty Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8DECD),
+                                borderRadius: BorderRadius.circular(3),
+                                border: Border.all(color: const Color(0xFFC5A059), width: 0.8),
+                              ),
+                              child: Text(
+                                topic.difficulty.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 9.0,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF4A3E3D),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${topic.subtopics.length} Subtopics',
+                              style: const TextStyle(
+                                fontFamily: 'serif',
+                                fontSize: 11.0,
+                                fontStyle: FontStyle.italic,
+                                color: Color(0xFF6B5B58),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 68,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFD4AF37), width: 1.2),
-                    color: const Color(0xFFFFFDF8),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Image.asset(
-                    _getSubjectArtifact(),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.auto_stories, size: 36, color: Color(0xFF7A1C2E)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Fig 1.2: Codex Relic • ${widget.building.name}',
-                        style: const TextStyle(
-                          fontFamily: 'serif',
-                          fontSize: 15.0,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF4A3E3D),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Ancient schematic parchment detailing core proofs and architectural balance.',
-                        style: TextStyle(
-                          fontFamily: 'serif',
-                          fontSize: 14.0,
-                          fontStyle: FontStyle.italic,
-                          height: 1.35,
-                          color: Color(0xFF6B5B58),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+          ),
+          const SizedBox(height: 6),
+          // Drag Hint
+          Center(
+            child: GestureDetector(
+              key: const Key('turn_page_hint'),
+              onTap: _turnPageForward,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7A1C2E).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF7A1C2E).withValues(alpha: 0.35),
+                    width: 1.0,
                   ),
                 ),
-              ],
+                child: const Text(
+                  'DRAG PAGE TO TURN ➔',
+                  style: TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                    color: Color(0xFF7A1C2E),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -1216,11 +1360,13 @@ class _LessonBookViewState extends State<LessonBookView>
     );
   }
 
-  // ── PAGE 4 (Right): REALM QUESTS & APPLICATION LAB ──────────────────────────
+  // ── PAGE 4 (Right): SUBTOPICS & CODEX SPELLS ────────────────────────────────
   Widget _buildPage4Right() {
-    final topic = _content?.topic ?? widget.building.name;
+    final activeTopic = _selectedTopic;
+    final topicTitle = activeTopic?.name ?? widget.building.name;
+    final subtopics = activeTopic?.subtopics ?? [];
     final page4Text =
-        'Section 4: Realm Applications. How knowledge of $topic fuels discovery and unlocks mastery across the islands.';
+        'Section 4: Subtopics Codex for $topicTitle. Attune your chosen subtopic to tailor your battle trial and codex questions.';
 
     return _buildParchmentPage(
       isLeft: false,
@@ -1232,83 +1378,274 @@ class _LessonBookViewState extends State<LessonBookView>
           _buildPageHeader(
             isLeft: false,
             pageNumber: 4,
-            title: topic.toUpperCase(),
-            subtitle: 'APPLICATIONS',
+            title: topicTitle.toUpperCase(),
+            subtitle: 'SUBTOPICS & SPELLS',
             pageText: page4Text,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
 
           const Text(
-            'REALM QUESTS & PRACTICE',
+            'SUBTOPICS & SPELLS',
             style: TextStyle(
               fontFamily: 'serif',
               fontSize: 18.5,
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
-              color: Color(0xFF4A3E3D),
+              letterSpacing: 1.3,
+              color: Color(0xFF7A1C2E),
             ),
           ),
           const SizedBox(height: 6),
 
-          Text(
-            'Every concept in $topic is a tool. From navigating sea archipelagos to charting astrological alignments, scholars leverage these tenets daily.',
-            style: const TextStyle(
-              fontFamily: 'serif',
-              fontSize: 16.5,
-              height: 1.45,
-              color: Color(0xFF2C2422),
-            ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          const SizedBox(height: 10),
-
-          _buildKeyPoint('Celestial Navigation: Calculate optimal courses between archipelago islands.'),
-          _buildKeyPoint('Chamber Architecture: Upgrade building capacities and unlock radiant visual auras.'),
-          _buildKeyPoint('Guild Challenges: Solve collaborative quests with academy companions.'),
-
-          const SizedBox(height: 10),
-
-          // Ancient Scholar Quote
+          // Active Chapter Indicator
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: const Color(0xFFF7F1E3),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.6), width: 1.0),
+              border: Border.all(color: const Color(0xFFD4AF37), width: 1.0),
             ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Icon(Icons.format_quote_rounded, size: 22, color: Color(0xFFC5A059)),
-                SizedBox(width: 8),
+                const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF7A1C2E)),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '“The universe is written in mathematical symbols; to understand its mysteries is to understand nature itself.”',
-                    style: TextStyle(
+                    'Chapter: $topicTitle',
+                    style: const TextStyle(
                       fontFamily: 'serif',
-                      fontSize: 15.0,
-                      fontStyle: FontStyle.italic,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
                       color: Color(0xFF4A3E3D),
-                      height: 1.35,
                     ),
-                    maxLines: 3,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 6),
 
-          const SizedBox(height: 12),
+          // Subtopics List
+          Expanded(
+            child: subtopics.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No specific subtopics in this chapter codex.',
+                      style: TextStyle(
+                        fontFamily: 'serif',
+                        fontSize: 14.0,
+                        fontStyle: FontStyle.italic,
+                        color: Color(0xFF6B5B58),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: subtopics.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final subtopic = subtopics[idx];
+                      final isAttuned = _selectedSubtopic?.id == subtopic.id;
 
+                      return Container(
+                        key: Key('subtopic_card_${subtopic.id}'),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isAttuned ? const Color(0xFFF2EADC) : const Color(0xFFFAF5EC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isAttuned ? const Color(0xFF7A1C2E) : const Color(0xFFC5A059),
+                            width: isAttuned ? 1.8 : 1.0,
+                          ),
+                          boxShadow: [
+                            if (isAttuned)
+                              BoxShadow(
+                                color: const Color(0xFF7A1C2E).withValues(alpha: 0.1),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    subtopic.name,
+                                    style: TextStyle(
+                                      fontFamily: 'serif',
+                                      fontSize: 15.0,
+                                      fontWeight: FontWeight.bold,
+                                      color: isAttuned ? const Color(0xFF7A1C2E) : const Color(0xFF2C2422),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE8DECD),
+                                    borderRadius: BorderRadius.circular(3),
+                                    border: Border.all(color: const Color(0xFFC5A059), width: 0.8),
+                                  ),
+                                  child: Text(
+                                    subtopic.difficulty.toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF4A3E3D),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+
+                            // Subtopic UUID Monospace Pill
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E1E2E),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                'UUID: ${subtopic.id}',
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 10.0,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFA6E3A1),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+
+                            // Description
+                            Text(
+                              subtopic.description,
+                              style: const TextStyle(
+                                fontFamily: 'serif',
+                                fontSize: 13.0,
+                                height: 1.3,
+                                color: Color(0xFF5A4B48),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+
+                            // Attune Button / Status
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (isAttuned)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2E7D32),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.check_circle, size: 13, color: Colors.white),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'ATTUNED ACTIVE',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  ElevatedButton.icon(
+                                    key: Key('attune_subtopic_${subtopic.id}'),
+                                    onPressed: () {
+                                      PlayerProfile.updateActiveTopic(
+                                        topicId: activeTopic?.id ?? '',
+                                        subtopicId: subtopic.id,
+                                        topicName: activeTopic?.name,
+                                        subtopicName: subtopic.name,
+                                      );
+                                      setState(() {
+                                        _selectedSubtopic = subtopic;
+                                        _attunedMessage = 'Attuned: ${subtopic.name}';
+                                      });
+                                      _fetchLessonContent();
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF7A1C2E),
+                                      foregroundColor: const Color(0xFFD4AF37),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      visualDensity: VisualDensity.compact,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
+                                        side: const BorderSide(color: Color(0xFFD4AF37), width: 1.0),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.flash_on_rounded, size: 13),
+                                    label: const Text(
+                                      'ATTUNE SUBTOPIC',
+                                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (_attunedMessage != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF2E7D32)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _attunedMessage!,
+                      style: const TextStyle(
+                        fontFamily: 'serif',
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+
+          // Drag Page Hint
           Center(
             child: GestureDetector(
               key: const Key('finish_chapter_hint'),
               onTap: _turnPageForward,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFF7A1C2E).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
@@ -1317,14 +1654,14 @@ class _LessonBookViewState extends State<LessonBookView>
                     width: 1.0,
                   ),
                 ),
-                child: Text(
+                child: const Text(
                   'DRAG PAGE TO FINISH CHAPTER ➔',
                   style: TextStyle(
                     fontFamily: 'serif',
-                    fontSize: 14.0,
+                    fontSize: 12.0,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1.6,
-                    color: const Color(0xFF7A1C2E).withValues(alpha: 0.9),
+                    letterSpacing: 1.5,
+                    color: Color(0xFF7A1C2E),
                   ),
                 ),
               ),
@@ -1522,12 +1859,66 @@ class _LessonBookViewState extends State<LessonBookView>
             ),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
+
+          // Attuned Codex Banner (Active Topic & Subtopic IDs)
+          if (_selectedTopic != null || _selectedSubtopic != null)
+            Container(
+              key: const Key('attuned_codex_banner'),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F1E3),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFC5A059), width: 1.0),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.auto_stories, size: 14, color: Color(0xFF7A1C2E)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${_selectedTopic?.name ?? "Topic"} ➔ ${_selectedSubtopic?.name ?? "General"}',
+                          style: const TextStyle(
+                            fontFamily: 'serif',
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF7A1C2E),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_selectedSubtopic != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      'Target ID: ${_selectedSubtopic!.id}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF5A4B48),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 12),
 
           // Go to Quiz Button (Completes lesson, closes book, and launches Quiz in dedicated arena!)
           ElevatedButton.icon(
             key: const Key('go_to_quiz_btn'),
             onPressed: () {
+              _claimChapterRewards();
               MobileTtsService.instance.stop();
               setState(() {
                 _isOpen = false;
@@ -1537,7 +1928,11 @@ class _LessonBookViewState extends State<LessonBookView>
                 if (mounted) {
                   widget.onClose?.call();
                   BuildingManager().closeLessonBook();
-                  BuildingManager().openQuiz(widget.building);
+                  BuildingManager().openQuiz(
+                    widget.building,
+                    topicId: _selectedTopic?.id,
+                    subtopicId: _selectedSubtopic?.id,
+                  );
                   widget.onGoToQuiz?.call();
                 }
               });
@@ -1822,46 +2217,7 @@ class _LessonBookViewState extends State<LessonBookView>
     );
   }
 
-  Widget _buildStepCard(String stepTitle, String stepDesc) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.arrow_right_rounded, size: 18, color: Color(0xFF7A1C2E)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: RichText(
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$stepTitle: ',
-                    style: const TextStyle(
-                      fontFamily: 'serif',
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF7A1C2E),
-                    ),
-                  ),
-                  TextSpan(
-                    text: stepDesc,
-                    style: const TextStyle(
-                      fontFamily: 'serif',
-                      fontSize: 15.5,
-                      height: 1.35,
-                      color: Color(0xFF3D2F2D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildCheckItem(String text) {
     return Padding(

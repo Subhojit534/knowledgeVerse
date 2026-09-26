@@ -44,6 +44,12 @@ class BuildingData {
   /// Primary theme color for UI badges and card borders.
   final Color themeColor;
 
+  /// Currently attuned topic and subtopic UUIDs from the Red Spell Book
+  final String? activeTopicId;
+  final String? activeSubtopicId;
+  final String? activeTopicName;
+  final String? activeSubtopicName;
+
   const BuildingData({
     required this.id,
     required this.name,
@@ -57,6 +63,10 @@ class BuildingData {
     int? xpRequired,
     required this.lessonsAvailable,
     this.themeColor = const Color(0xFF89B4FA),
+    this.activeTopicId,
+    this.activeSubtopicId,
+    this.activeTopicName,
+    this.activeSubtopicName,
   }) : _xpRequired = xpRequired;
 
   /// Calculates XP progress ratio [0.0 to 1.0].
@@ -64,4 +74,42 @@ class BuildingData {
 
   /// Whether building can be upgraded to next level.
   bool get canUpgrade => level < 3 && currentXp >= xpRequired;
+
+  BuildingData copyWith({
+    String? id,
+    String? name,
+    IconData? icon,
+    String? sprite,
+    int? level,
+    String? subject,
+    String? description,
+    bool? unlocked,
+    int? currentXp,
+    int? xpRequired,
+    int? lessonsAvailable,
+    Color? themeColor,
+    String? activeTopicId,
+    String? activeSubtopicId,
+    String? activeTopicName,
+    String? activeSubtopicName,
+  }) {
+    return BuildingData(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      sprite: sprite ?? this.sprite,
+      level: level ?? this.level,
+      subject: subject ?? this.subject,
+      description: description ?? this.description,
+      unlocked: unlocked ?? this.unlocked,
+      currentXp: currentXp ?? this.currentXp,
+      xpRequired: xpRequired ?? _xpRequired,
+      lessonsAvailable: lessonsAvailable ?? this.lessonsAvailable,
+      themeColor: themeColor ?? this.themeColor,
+      activeTopicId: activeTopicId ?? this.activeTopicId,
+      activeSubtopicId: activeSubtopicId ?? this.activeSubtopicId,
+      activeTopicName: activeTopicName ?? this.activeTopicName,
+      activeSubtopicName: activeSubtopicName ?? this.activeSubtopicName,
+    );
+  }
 }

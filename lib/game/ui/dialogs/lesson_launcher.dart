@@ -4,7 +4,6 @@ import '../../buildings/building_data.dart';
 import '../../buildings/sample_building_data.dart';
 import '../../managers/building_manager.dart';
 import '../../managers/game_state_manager.dart';
-import 'building_learning_panel.dart';
 import 'lesson_book_view.dart';
 
 /// Reusable transition manager launching interactive AI-powered Building Learning Panels

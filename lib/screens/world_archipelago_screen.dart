@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../config/game_assets.dart';
+import '../game/buildings/sample_building_data.dart';
+import '../game/ui/dialogs/lesson_launcher.dart';
 import '../models/player_profile.dart';
 import '../services/theme_music_service.dart';
 import 'pvp/pvp_arena_hub_screen.dart';
@@ -491,7 +494,72 @@ class _WorldArchipelagoScreenState extends State<WorldArchipelagoScreen>
               ),
             ),
 
-
+            // 7. Bottom Floating Action: RED SPELL BOOK (Codex Topics Map)
+            Positioned(
+              bottom: isMobile ? 14 : 24,
+              left: isMobile ? 14 : 24,
+              right: isMobile ? 14 : 24,
+              child: Center(
+                child: GestureDetector(
+                  key: const Key('open_red_spellbook_btn'),
+                  onTap: () {
+                    final building = SampleBuildingData.grandHall;
+                    LessonLauncher.launch(context, building: building);
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 16 : 24,
+                      vertical: isMobile ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7A1C2E), // Crimson Codex
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFF2CA50), // Antique Gold
+                        width: 2.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF2CA50).withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                        const BoxShadow(
+                          color: Colors.black,
+                          offset: Offset(4, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          UiAssets.iconsRedSpellbookIcon,
+                          width: isMobile ? 24 : 28,
+                          height: isMobile ? 24 : 28,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.auto_stories,
+                            color: Color(0xFFF2CA50),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'RED SPELL BOOK • CODEX MAP',
+                          style: GoogleFonts.spaceMono(
+                            fontSize: isMobile ? 12 : 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: const Color(0xFFF7E7B4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

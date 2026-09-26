@@ -317,9 +317,25 @@ class ApiService {
   // LEARNING APIs (/api/learning)
   // ===========================================================================
 
-  /// Fetch learning content & questions via Groq AI
+  /// Fetch learning content & questions via Groq AI / Backend SQL
   static Future<http.Response> getLearningContent(Map<String, dynamic> requestPayload) async {
-    return post('/api/learning/content', body: requestPayload);
+    final payload = Map<String, dynamic>.from(requestPayload);
+    if ((payload['subtopic_id'] == null || payload['subtopic_id'].toString().isEmpty) &&
+        (payload['topic_id'] == null || payload['topic_id'].toString().isEmpty)) {
+      final subject = payload['subject']?.toString() ?? '';
+      final grade = payload['grade']?.toString() ?? 'Class 10';
+      final matchingTopics = CurriculumSeedCatalog.getTopicsFor(subject: subject, grade: grade);
+      if (matchingTopics.isNotEmpty) {
+        payload['topic_id'] = matchingTopics.first.id;
+        if (matchingTopics.first.subtopics.isNotEmpty) {
+          payload['subtopic_id'] = matchingTopics.first.subtopics.first.id;
+        }
+      } else {
+        payload['topic_id'] = 'b0000010-0001-0000-0000-000000000041';
+        payload['subtopic_id'] = 'c0000010-0001-0000-0000-000000000081';
+      }
+    }
+    return post('/api/learning/content', body: payload);
   }
 
   /// Submit quiz score and earn XP & coins

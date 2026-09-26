@@ -44,6 +44,10 @@ class PlayerProfile {
     this.weeklyMinutes = 45,
     this.lastEnergyUpdate = 0,
     this.ownedItems = const [],
+    this.activeTopicId,
+    this.activeSubtopicId,
+    this.activeTopicName,
+    this.activeSubtopicName,
   });
 
   final String id;
@@ -78,6 +82,10 @@ class PlayerProfile {
   final int weeklyMinutes;
   final int lastEnergyUpdate;
   final List<String> ownedItems;
+  final String? activeTopicId;
+  final String? activeSubtopicId;
+  final String? activeTopicName;
+  final String? activeSubtopicName;
 
   static PlayerProfile? current;
 
@@ -165,6 +173,10 @@ class PlayerProfile {
     int? weeklyMinutes,
     int? lastEnergyUpdate,
     List<String>? ownedItems,
+    String? activeTopicId,
+    String? activeSubtopicId,
+    String? activeTopicName,
+    String? activeSubtopicName,
   }) {
     final newXp = xp ?? this.xp;
     final newLevel = level ?? computeLevel(newXp);
@@ -193,6 +205,10 @@ class PlayerProfile {
       weeklyMinutes: weeklyMinutes ?? this.weeklyMinutes,
       lastEnergyUpdate: lastEnergyUpdate ?? this.lastEnergyUpdate,
       ownedItems: ownedItems ?? this.ownedItems,
+      activeTopicId: activeTopicId ?? this.activeTopicId,
+      activeSubtopicId: activeSubtopicId ?? this.activeSubtopicId,
+      activeTopicName: activeTopicName ?? this.activeTopicName,
+      activeSubtopicName: activeSubtopicName ?? this.activeSubtopicName,
     );
   }
 
@@ -346,6 +362,10 @@ class PlayerProfile {
         'weekly_minutes': weeklyMinutes,
         'last_energy_update': lastEnergyUpdate,
         'owned_items': ownedItems,
+        if (activeTopicId != null) 'active_topic_id': activeTopicId,
+        if (activeSubtopicId != null) 'active_subtopic_id': activeSubtopicId,
+        if (activeTopicName != null) 'active_topic_name': activeTopicName,
+        if (activeSubtopicName != null) 'active_subtopic_name': activeSubtopicName,
       };
 
   /// Prepares payload conforming strictly to backend /api/profile schema
@@ -419,6 +439,10 @@ class PlayerProfile {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+      activeTopicId: json['active_topic_id'] as String? ?? json['activeTopicId'] as String?,
+      activeSubtopicId: json['active_subtopic_id'] as String? ?? json['activeSubtopicId'] as String?,
+      activeTopicName: json['active_topic_name'] as String? ?? json['activeTopicName'] as String?,
+      activeSubtopicName: json['active_subtopic_name'] as String? ?? json['activeSubtopicName'] as String?,
     );
   }
 
@@ -445,10 +469,40 @@ class PlayerProfile {
     }
     await prefs.setStringList(subjectsKey, subjects);
     await prefs.setBool(onboardedKey, true);
+    if (activeTopicId != null) await prefs.setString('active_topic_id', activeTopicId!);
+    if (activeSubtopicId != null) await prefs.setString('active_subtopic_id', activeSubtopicId!);
+    if (activeTopicName != null) await prefs.setString('active_topic_name', activeTopicName!);
+    if (activeSubtopicName != null) await prefs.setString('active_subtopic_name', activeSubtopicName!);
     debugPrint('💾 [PlayerProfile Saved]: Name: "$name", Level: $level, XP: $xp, Coins: $coins, Gems: $gems, Energy: $energy, Streak: $streakDays');
 
     // Asynchronously synchronize with Backend DB
     _syncWithDb();
+  }
+
+  /// Persist active selected topic and subtopic from the Red Spell Book
+  static Future<void> updateActiveTopic({
+    required String topicId,
+    required String subtopicId,
+    String? topicName,
+    String? subtopicName,
+  }) async {
+    final p = current ?? const PlayerProfile();
+    final updated = p.copyWith(
+      activeTopicId: topicId,
+      activeSubtopicId: subtopicId,
+      activeTopicName: topicName,
+      activeSubtopicName: subtopicName,
+    );
+    current = updated;
+    notifier.update(updated);
+    await updated.save();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_topic_id', topicId);
+    await prefs.setString('active_subtopic_id', subtopicId);
+    if (topicName != null) await prefs.setString('active_topic_name', topicName);
+    if (subtopicName != null) await prefs.setString('active_subtopic_name', subtopicName);
+    debugPrint('📖 [SpellBook]: Attuned active topic "$topicName" ($topicId) and subtopic "$subtopicName" ($subtopicId)');
   }
 
   void _syncWithDb() {
@@ -534,6 +588,19 @@ class PlayerProfile {
         }
         profile = profile.copyWith(id: savedId);
         await prefs.setString(_prefsKey, jsonEncode(profile.toJson()));
+      }
+
+      final savedTopicId = prefs.getString('active_topic_id');
+      final savedSubtopicId = prefs.getString('active_subtopic_id');
+      final savedTopicName = prefs.getString('active_topic_name');
+      final savedSubtopicName = prefs.getString('active_subtopic_name');
+      if (savedTopicId != null || savedSubtopicId != null) {
+        profile = profile.copyWith(
+          activeTopicId: profile.activeTopicId ?? savedTopicId,
+          activeSubtopicId: profile.activeSubtopicId ?? savedSubtopicId,
+          activeTopicName: profile.activeTopicName ?? savedTopicName,
+          activeSubtopicName: profile.activeSubtopicName ?? savedSubtopicName,
+        );
       }
 
       current = profile;

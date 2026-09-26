@@ -186,11 +186,19 @@ class BuildingManager extends ChangeNotifier {
   BuildingData? _activeQuizBuilding;
   BuildingData? get activeQuizBuilding => _activeQuizBuilding;
 
-  /// Opens the Quiz Arena for a building outside the book.
-  void openQuiz(BuildingData building) {
+  String? _activeQuizTopicId;
+  String? get activeQuizTopicId => _activeQuizTopicId;
+
+  String? _activeQuizSubtopicId;
+  String? get activeQuizSubtopicId => _activeQuizSubtopicId;
+
+  /// Opens the Quiz Arena for a building outside the book with specific topic and subtopic UUIDs.
+  void openQuiz(BuildingData building, {String? topicId, String? subtopicId}) {
     _activePanelBuilding = null;
     _activeBookBuilding = null;
     _activeQuizBuilding = building;
+    _activeQuizTopicId = topicId ?? building.activeTopicId;
+    _activeQuizSubtopicId = subtopicId ?? building.activeSubtopicId;
     notifyListeners();
   }
 
@@ -198,6 +206,8 @@ class BuildingManager extends ChangeNotifier {
   void closeQuiz() {
     if (_activeQuizBuilding != null) {
       _activeQuizBuilding = null;
+      _activeQuizTopicId = null;
+      _activeQuizSubtopicId = null;
       notifyListeners();
     }
   }

@@ -25,24 +25,54 @@ class LearningService {
 
   /// Fetches AI-generated learning explanation and 4 MCQs for a given subject building.
   static Future<LearningContentResponse> fetchLearningContent(LearningRequest request) async {
-    final cacheKey = '${request.buildingId}_${request.subject}_${request.studentLevel}';
+    final subId = request.subtopicId ?? '';
+    final topId = request.topicId ?? '';
+    final cacheKey = '${request.buildingId}_${request.subject}_${request.studentLevel}_${topId}_$subId';
+    final legacyKey = '${request.buildingId}_${request.subject}_${request.studentLevel}';
     if (_cache.containsKey(cacheKey)) {
       debugPrint('📦 [LearningService]: Returning cached content for $cacheKey');
       return _cache[cacheKey]!;
+    }
+    if (_cache.containsKey(legacyKey)) {
+      debugPrint('📦 [LearningService]: Returning cached content for $legacyKey');
+      return _cache[legacyKey]!;
     }
 
     final base = ApiConfig.baseUrl;
 
     try {
+      final payload = request.toJson();
+      if ((payload['subtopic_id'] == null || payload['subtopic_id'].toString().isEmpty) &&
+          (payload['topic_id'] == null || payload['topic_id'].toString().isEmpty)) {
+        final matchingTopics = CurriculumSeedCatalog.getTopicsFor(
+          subject: request.subject,
+          grade: request.grade,
+        );
+        if (matchingTopics.isNotEmpty) {
+          payload['topic_id'] = matchingTopics.first.id;
+          if (matchingTopics.first.subtopics.isNotEmpty) {
+            payload['subtopic_id'] = matchingTopics.first.subtopics.first.id;
+          }
+        }
+      }
+
       final response = await ApiService.post(
         '/api/learning/content',
-        body: request.toJson(),
+        body: payload,
         timeout: _timeout,
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        final result = LearningContentResponse.fromJson(data, base);
+        final result = LearningContentResponse.fromJson(
+          data,
+          base,
+          buildingId: request.buildingId,
+          buildingName: request.buildingName,
+          subject: request.subject,
+          topic: request.topic ?? (data['topic'] as String? ?? 'Subject Fundamentals'),
+          explanation: data['explanation'] as String?,
+        );
         _cache[cacheKey] = result;
         return result;
       }
@@ -51,7 +81,7 @@ class LearningService {
       debugPrint('❌ [LearningService]: Exception fetching AI content: $e');
     }
 
-    // Offline / fallback fallback path using comprehensive CurriculumSeedCatalog
+    // Offline / fallback path using comprehensive CurriculumSeedCatalog
     final fallback = CurriculumSeedCatalog.getLearningContentFor(request);
     _cache[cacheKey] = fallback;
     return fallback;

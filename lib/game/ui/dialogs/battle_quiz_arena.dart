@@ -128,6 +128,13 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
 
     try {
       final profile = PlayerProfile.notifier.value ?? PlayerProfile.current ?? const PlayerProfile();
+      final topicId = BuildingManager().activeQuizTopicId ??
+          widget.building.activeTopicId ??
+          profile.activeTopicId;
+      final subtopicId = BuildingManager().activeQuizSubtopicId ??
+          widget.building.activeSubtopicId ??
+          profile.activeSubtopicId;
+
       final req = LearningRequest(
         buildingId: widget.building.id,
         buildingName: widget.building.name,
@@ -136,6 +143,8 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
         grade: profile.grade.isNotEmpty ? profile.grade : 'Class 10',
         curriculum: profile.curriculum.isNotEmpty ? profile.curriculum : 'CBSE',
         topic: widget.building.name,
+        topicId: topicId,
+        subtopicId: subtopicId,
       );
 
       final response = await LearningService.fetchLearningContent(req);
@@ -678,6 +687,12 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
 
   // ── 1. TOP PARCHMENT HEADER ────────────────────────────────────────────────
   Widget _buildParchmentHeader(int totalQuestions) {
+    final profile = PlayerProfile.notifier.value ?? PlayerProfile.current;
+    final subtopicName = widget.building.activeSubtopicName ?? profile?.activeSubtopicName;
+    final subtopicId = BuildingManager().activeQuizSubtopicId ??
+        widget.building.activeSubtopicId ??
+        profile?.activeSubtopicId;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
@@ -696,17 +711,37 @@ class _BattleQuizArenaState extends State<BattleQuizArena>
                 const Icon(Icons.auto_stories, size: 18, color: Color(0xFFD4AF37)),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    widget.building.name.toUpperCase(),
-                    style: const TextStyle(
-                      fontFamily: 'serif',
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                      color: Color(0xFFF7E7B4),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        subtopicName != null && subtopicName.isNotEmpty
+                            ? '${widget.building.name.toUpperCase()} • $subtopicName'
+                            : widget.building.name.toUpperCase(),
+                        style: const TextStyle(
+                          fontFamily: 'serif',
+                          fontSize: 15.0,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.1,
+                          color: Color(0xFFF7E7B4),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtopicId != null && subtopicId.isNotEmpty)
+                        Text(
+                          'UUID: $subtopicId',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFA6E3A1),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
                 ),
               ],
